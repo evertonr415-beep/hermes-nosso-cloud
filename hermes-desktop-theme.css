@@ -1,0 +1,177 @@
+/* Hermes Nosso — Desktop-inspired web skin
+   Keeps the official dashboard behavior intact; visual overrides only. */
+
+:root {
+  --background-base: #061515;
+  --midground-base: #f2dfc8;
+  --theme-radius: 0.78rem;
+  --theme-spacing-mul: 0.96;
+  --theme-base-size: 14px;
+
+  --hn-panel: rgba(12, 34, 34, 0.78);
+  --hn-panel-strong: rgba(12, 34, 34, 0.94);
+  --hn-panel-soft: rgba(242, 223, 200, 0.045);
+  --hn-border: rgba(242, 223, 200, 0.13);
+  --hn-border-strong: rgba(242, 223, 200, 0.22);
+  --hn-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+  --hn-glow: 0 0 0 1px rgba(242, 223, 200, 0.025) inset;
+}
+
+html,
+body,
+#root {
+  background:
+    radial-gradient(circle at 12% -8%, rgba(25, 95, 88, 0.20), transparent 36rem),
+    radial-gradient(circle at 92% 110%, rgba(108, 80, 46, 0.13), transparent 34rem),
+    #061515 !important;
+}
+
+body {
+  color: var(--midground);
+  letter-spacing: -0.006em;
+}
+
+/* Desktop-like structural surfaces. */
+aside,
+header,
+nav,
+[role="dialog"],
+[data-slot*="sidebar"],
+[class*="sidebar"],
+[class*="Sidebar"] {
+  background-color: var(--hn-panel) !important;
+  border-color: var(--hn-border) !important;
+  backdrop-filter: blur(18px) saturate(118%);
+  -webkit-backdrop-filter: blur(18px) saturate(118%);
+}
+
+aside,
+[data-slot*="sidebar"],
+[class*="sidebar"] {
+  box-shadow: 12px 0 44px rgba(0, 0, 0, 0.16);
+}
+
+/* Cards / panes keep the native layout but gain the Desktop material. */
+[class*="card"],
+[class*="Card"],
+[class*="panel"],
+[class*="Panel"],
+section.rounded-lg,
+section.rounded-xl,
+div.rounded-lg.border,
+div.rounded-xl.border {
+  border-color: var(--hn-border) !important;
+  background-color: var(--hn-panel-soft);
+  box-shadow: var(--hn-glow);
+}
+
+/* Inputs / editors. */
+input,
+textarea,
+select,
+[contenteditable="true"] {
+  border-color: var(--hn-border) !important;
+  background-color: rgba(2, 18, 18, 0.72) !important;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+[contenteditable="true"]:focus {
+  outline: none;
+  border-color: var(--hn-border-strong) !important;
+  box-shadow: 0 0 0 3px rgba(242, 223, 200, 0.07) !important;
+}
+
+/* Buttons: restrained native-desktop lift. */
+button {
+  transition:
+    transform 110ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Dialog / menu material. */
+[role="dialog"],
+[role="menu"],
+[role="listbox"],
+[data-radix-popper-content-wrapper] > div {
+  border-color: var(--hn-border-strong) !important;
+  box-shadow: var(--hn-shadow), var(--hn-glow);
+}
+
+/* Softer separators. */
+hr,
+.border,
+.border-t,
+.border-b,
+.border-l,
+.border-r {
+  border-color: var(--hn-border);
+}
+
+/* Desktop-style scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(242, 223, 200, 0.20) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(242, 223, 200, 0.16);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(242, 223, 200, 0.28);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Keep mobile practical: reduce blur and edge chrome. */
+@media (max-width: 768px) {
+  aside,
+  header,
+  nav,
+  [role="dialog"],
+  [data-slot*="sidebar"],
+  [class*="sidebar"] {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Accessibility: do not animate motion-sensitive users. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
