@@ -3,7 +3,6 @@ set -eu
 
 mkdir -p /opt/data
 
-# Safe cleanup of artifacts created only by automated validation.
 rm -rf /opt/data/smoke
 rm -f /opt/data/workspace/hermes-smoke-file.txt
 rm -f /opt/data/scripts/hermes_smoke_cron.py
@@ -62,23 +61,9 @@ p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding
 PY
 fi
 
-# Start the authenticated Hermes API server on loopback only.
-# It shares the same persistent HERMES_HOME and gives trusted server-side clients
-# the supported /v1 and /api/sessions programmatic surfaces.
-if [ "${HERMES_BRIDGE_API:-0}" = "1" ]; then
-  if [ -z "${API_SERVER_KEY:-}" ]; then
-    echo "[bridge-api] API_SERVER_KEY missing; refusing to start bridge"
-  else
-    (
-      export API_SERVER_ENABLED=true
-      export API_SERVER_HOST=127.0.0.1
-      export API_SERVER_PORT="${API_SERVER_PORT:-8642}"
-      exec hermes gateway
-    ) &
-    echo "[bridge-api] Hermes API server enabled on loopback:${API_SERVER_PORT:-8642}"
-  fi
-fi
-
+# The Hermes Docker image already owns gateway/API supervision through s6.
+# Do not launch a second gateway here. HERMES_GATEWAY_BOOTSTRAP_STATE=running
+# and API_SERVER_* configure the single supervised gateway after s6 is ready.
 if [ "${HERMES_RUN_SMOKE_TESTS:-0}" = "1" ]; then
   (
     sleep 20
