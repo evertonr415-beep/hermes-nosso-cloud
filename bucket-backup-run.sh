@@ -6,7 +6,7 @@ sleep 300
 
 while true; do
   if [ -n "${HERMES_BUCKET_NAME:-}" ] && [ -n "${HERMES_BUCKET_ENDPOINT:-}" ]; then
-    /opt/hermes/.venv/bin/python /usr/local/bin/hermes-bucket-backup || true
+    /usr/bin/python3 /usr/local/bin/hermes-bucket-backup || true
   fi
   sleep 21600
 done
