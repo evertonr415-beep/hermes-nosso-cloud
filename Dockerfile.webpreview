@@ -10,6 +10,8 @@ RUN apt-get -o Acquire::Retries=3 update \
 COPY hermes-desktop-theme.css /opt/hermes/hermes_cli/web_dist/hermes-desktop-theme.css
 COPY hermes-desktop-brand.js /opt/hermes/hermes_cli/web_dist/hermes-desktop-brand.js
 COPY hermes-preview-nginx.conf /etc/nginx/nginx.conf
+COPY start-web-preview.sh /usr/local/bin/start-hermes-web-preview
+RUN chmod +x /usr/local/bin/start-hermes-web-preview
 
 RUN python3 - <<'PY'
 from pathlib import Path
@@ -41,4 +43,4 @@ PY
 
 EXPOSE 9119
 ENTRYPOINT []
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/usr/local/bin/start-hermes-web-preview"]
