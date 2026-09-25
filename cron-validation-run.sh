@@ -6,6 +6,7 @@ if [ "${HERMES_CRON_VALIDATE:-0}" != "1" ]; then
 fi
 
 mkdir -p /opt/data/cron-validation /opt/data/scripts
+chown -R hermes:hermes /opt/data/cron-validation /opt/data/scripts
 rm -f /opt/data/cron-validation/ran.txt
 cat > /opt/data/scripts/cron_validation.py <<'PY'
 from pathlib import Path
