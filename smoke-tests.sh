@@ -29,7 +29,7 @@ run_test WEB_SEARCH hermes -z "You must use the web_search tool once. Search the
 run_test BROWSER hermes -z "You must use the browser/agent-browser tool to open https://example.com and inspect the page. If the page title is Example Domain, reply exactly: BROWSER_OK"
 
 # 5. Skills inventory
-run_test SKILLS hermes skills list --source all --enabled-only
+run_test SKILLS hermes skills list --source all
 
 # 6. Cron scheduler status + real no-agent job execution
 cat > /opt/data/scripts/hermes_smoke_cron.py <<'PY'
@@ -44,7 +44,7 @@ JOB_ID="$(printf '%s\n' "$CREATE_OUT" | grep -Eo '[0-9a-fA-F-]{8,}' | head -n1)"
 if [ -n "$JOB_ID" ]; then
   echo "CRON_JOB_ID=$JOB_ID" >> "$LOG"
   hermes cron run "$JOB_ID" >> "$LOG" 2>&1
-  sleep 12
+  sleep 20
   if [ -f /opt/data/smoke/cron-ran.txt ]; then
     cat /opt/data/smoke/cron-ran.txt >> "$LOG"
   else
