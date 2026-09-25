@@ -1,0 +1,6 @@
+FROM python:3.12-alpine
+WORKDIR /app
+COPY bridge.py /app/bridge.py
+ENV BRIDGE_PORT=9120
+EXPOSE 9120
+CMD ["python","/app/bridge.py"]
