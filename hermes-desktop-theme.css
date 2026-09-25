@@ -175,3 +175,178 @@ hr,
     animation-iteration-count: 1 !important;
   }
 }
+
+
+/* ================================================================
+   Hermes Nosso — targeted Desktop shell
+   Uses stable dashboard hooks from the upstream React application.
+   ================================================================ */
+
+body.hermes-nosso-skin {
+  --hn-sidebar-width: 17.25rem;
+}
+
+/* Main application sidebar */
+#app-sidebar {
+  width: var(--hn-sidebar-width) !important;
+  background:
+    linear-gradient(180deg, rgba(10, 31, 31, 0.96), rgba(4, 20, 20, 0.93)) !important;
+  border-right: 1px solid var(--hn-border-strong) !important;
+  box-shadow: 18px 0 70px rgba(0, 0, 0, 0.22) !important;
+}
+
+#app-sidebar > div:first-child {
+  min-height: 4.45rem !important;
+  height: 4.45rem !important;
+  padding-inline: 1.05rem !important;
+  border-bottom-color: var(--hn-border) !important;
+  background: linear-gradient(180deg, rgba(242,223,200,0.035), transparent);
+}
+
+#app-sidebar > div:first-child [data-hermes-nosso-badge] {
+  display: inline-flex;
+  align-items: center;
+  height: 1.15rem;
+  padding: 0 .42rem;
+  border: 1px solid rgba(242,223,200,.2);
+  border-radius: 999px;
+  margin-left: .35rem;
+  font-size: .58rem;
+  line-height: 1;
+  letter-spacing: .11em;
+  color: rgba(242,223,200,.72);
+  background: rgba(242,223,200,.055);
+}
+
+#app-sidebar nav {
+  padding: .55rem .45rem .8rem !important;
+  border-top-color: transparent !important;
+}
+
+#app-sidebar nav ul {
+  gap: .16rem;
+}
+
+#app-sidebar nav a {
+  min-height: 2.42rem;
+  margin-inline: .08rem;
+  padding-inline: .72rem !important;
+  border: 1px solid transparent;
+  border-radius: .72rem;
+  color: rgba(242,223,200,.68) !important;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    transform 120ms ease !important;
+}
+
+#app-sidebar nav a:hover {
+  color: rgba(255,240,219,.96) !important;
+  background: rgba(242,223,200,.055) !important;
+  border-color: rgba(242,223,200,.065);
+}
+
+#app-sidebar nav a[aria-current="page"] {
+  color: #fff1dc !important;
+  background:
+    linear-gradient(90deg, rgba(41,118,106,.26), rgba(242,223,200,.055)) !important;
+  border-color: rgba(136,205,192,.18) !important;
+  box-shadow:
+    inset 3px 0 0 rgba(105, 194, 177, .72),
+    0 8px 24px rgba(0,0,0,.10);
+}
+
+#app-sidebar nav a svg {
+  opacity: .72;
+}
+
+#app-sidebar nav a[aria-current="page"] svg {
+  opacity: 1;
+}
+
+/* Footer/settings area */
+#app-sidebar > div:nth-last-child(-n+2) {
+  border-color: var(--hn-border) !important;
+}
+
+/* Central content gets the floating-workspace feel of Desktop. */
+[data-layout-variant] {
+  background:
+    radial-gradient(circle at 42% -15%, rgba(39, 119, 107, .13), transparent 34rem),
+    radial-gradient(circle at 90% 115%, rgba(115, 80, 45, .09), transparent 30rem),
+    #061515 !important;
+}
+
+/* Chat workspace */
+div:has(> .hermes-chat-xterm-host) {
+  border: 1px solid rgba(242,223,200,.12) !important;
+  border-radius: 1rem !important;
+  background: rgba(1, 12, 12, .84) !important;
+  box-shadow:
+    0 22px 60px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+.hermes-chat-xterm-host {
+  overflow: hidden;
+  border-radius: .72rem;
+}
+
+/* Right-side model + sessions rail */
+#chat-side-panel {
+  width: 17rem !important;
+  padding: .15rem 0 .5rem .2rem;
+}
+
+#chat-side-panel > div:first-child {
+  height: 2.35rem !important;
+}
+
+#chat-side-panel aside > div,
+#chat-side-panel [class*="Card"],
+#chat-side-panel [class*="card"] {
+  border-color: rgba(242,223,200,.11) !important;
+  background: rgba(242,223,200,.038) !important;
+  border-radius: .78rem !important;
+}
+
+/* Generic dashboard cards — calmer, denser Desktop look. */
+main [class*="Card"],
+main [class*="card"],
+[data-layout-variant] section.rounded-lg,
+[data-layout-variant] section.rounded-xl {
+  box-shadow:
+    0 12px 34px rgba(0,0,0,.12),
+    inset 0 1px 0 rgba(255,255,255,.018);
+}
+
+/* Page-level headings / desktop chrome */
+[data-layout-variant] h1,
+[data-layout-variant] h2 {
+  letter-spacing: -.02em;
+}
+
+/* Inputs become flatter, closer to the native app. */
+[data-layout-variant] input,
+[data-layout-variant] textarea,
+[data-layout-variant] select {
+  border-radius: .72rem !important;
+}
+
+/* Floating action buttons and compact controls. */
+[data-layout-variant] button.rounded,
+[data-layout-variant] button[class*="rounded"] {
+  border-radius: .68rem;
+}
+
+/* Mobile keeps the stock navigation width and avoids desktop-only density. */
+@media (max-width: 1023px) {
+  #app-sidebar {
+    width: min(18rem, 88vw) !important;
+  }
+
+  #chat-side-panel {
+    width: auto !important;
+  }
+}
