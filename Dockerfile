@@ -12,4 +12,4 @@ COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
 RUN chmod +x /usr/local/bin/hermes-railway-entrypoint /usr/local/bin/hermes-smoke-tests
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
-CMD ["sleep", "infinity"]
+CMD ["/bin/sh", "-c", "sleep 20; /usr/local/bin/hermes-smoke-tests; sleep infinity"]
