@@ -24,9 +24,6 @@ if [ "${HERMES_STORAGE_AUDIT:-0}" = "1" ]; then
   du -xh --max-depth=2 /opt/data 2>/dev/null | sort -h | tail -40 || true
 fi
 
-# Remove only the malformed gateway state written by an older bootstrap.
-# The official Hermes stage2 hook will recreate it when
-# HERMES_GATEWAY_BOOTSTRAP_STATE=running is set.
 if [ -f /opt/data/gateway_state.json ] && ! /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
 import json, sys
@@ -40,7 +37,6 @@ then
   rm -f /opt/data/gateway_state.json
 fi
 
-# Keep safe model/web defaults persistent.
 if [ -x /opt/hermes/.venv/bin/python ]; then
   /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
@@ -64,6 +60,23 @@ if isinstance(web, dict):
     web.setdefault("keyless_fallback", True)
 p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8")
 PY
+fi
+
+# Start the authenticated Hermes API server on loopback only.
+# It shares the same persistent HERMES_HOME and gives trusted server-side clients
+# the supported /v1 and /api/sessions programmatic surfaces.
+if [ "${HERMES_BRIDGE_API:-0}" = "1" ]; then
+  if [ -z "${API_SERVER_KEY:-}" ]; then
+    echo "[bridge-api] API_SERVER_KEY missing; refusing to start bridge"
+  else
+    (
+      export API_SERVER_ENABLED=true
+      export API_SERVER_HOST=127.0.0.1
+      export API_SERVER_PORT="${API_SERVER_PORT:-8642}"
+      exec hermes gateway
+    ) &
+    echo "[bridge-api] Hermes API server enabled on loopback:${API_SERVER_PORT:-8642}"
+  fi
 fi
 
 if [ "${HERMES_RUN_SMOKE_TESTS:-0}" = "1" ]; then
