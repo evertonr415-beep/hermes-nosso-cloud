@@ -73,4 +73,8 @@ if [ "${HERMES_RUN_SMOKE_TESTS:-0}" = "1" ]; then
   ) &
 fi
 
+echo "[storage-diag] filesystem:"
+df -h /opt/data 2>/dev/null || true
+echo "[storage-diag] top-level usage:"
+du -h -d 1 /opt/data 2>/dev/null | sort -h || true
 exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
