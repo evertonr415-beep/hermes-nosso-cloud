@@ -90,6 +90,19 @@ if [ "${HERMES_RUN_SMOKE_TESTS:-0}" = "1" ]; then
   ) &
 fi
 
+if [ "${HERMES_MODEL_VALIDATE:-0}" = "1" ]; then
+  (
+    sleep 20
+    echo "[model-validate] start"
+    if timeout 120 hermes -z "Reply with exactly: GPT6_HERMES_OK"; then
+      echo "[model-validate] command-ok"
+    else
+      rc=$?
+      echo "[model-validate] command-failed rc=$rc"
+    fi
+  ) &
+fi
+
 echo "[storage-diag] filesystem:"
 df -h /opt/data 2>/dev/null || true
 echo "[storage-diag] top-level usage:"
