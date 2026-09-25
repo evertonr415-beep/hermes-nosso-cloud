@@ -3,6 +3,18 @@ set -eu
 
 mkdir -p /opt/data
 
+# Safe cleanup of artifacts created only by automated validation.
+rm -rf /opt/data/smoke
+rm -f /opt/data/workspace/hermes-smoke-file.txt
+rm -f /opt/data/scripts/hermes_smoke_cron.py
+
+if [ "${HERMES_STORAGE_AUDIT:-0}" = "1" ]; then
+  echo "[storage-audit] df"
+  df -h /opt/data || true
+  echo "[storage-audit] largest paths"
+  du -xh --max-depth=2 /opt/data 2>/dev/null | sort -h | tail -40 || true
+fi
+
 # Remove only the malformed gateway state written by an older bootstrap.
 # The official Hermes stage2 hook will recreate it when
 # HERMES_GATEWAY_BOOTSTRAP_STATE=running is set.
