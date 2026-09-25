@@ -51,9 +51,9 @@ model = data.setdefault("model", {})
 if not isinstance(model, dict):
     model = {}
     data["model"] = model
-model["provider"] = "openai-codex"
-model["default"] = "gpt-5.6-sol"
-model["persist_switch_by_default"] = True
+model["provider"] = "openai-api"
+model["default"] = "gpt-6-sol"
+model["persist_switch_by_default"] = True\ndata["fallback_providers"] = [\n    {"provider": "openai-codex", "model": "gpt-6-sol"},\n    {"provider": "openai-codex", "model": "gpt-5.6-sol"},\n]
 web = data.setdefault("web", {})
 if isinstance(web, dict):
     web.setdefault("keyless_fallback", True)
