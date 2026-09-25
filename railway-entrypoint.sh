@@ -36,6 +36,21 @@ then
   rm -f /opt/data/gateway_state.json
 fi
 
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+  /opt/hermes/.venv/bin/python - <<'PY'
+from pathlib import Path
+import os
+p = Path("/opt/data/.env")
+key = os.environ.get("OPENAI_API_KEY", "").strip()
+if key:
+    lines = p.read_text(encoding="utf-8").splitlines() if p.exists() else []
+    kept = [line for line in lines if not line.startswith("OPENAI_API_KEY=")]
+    kept.append("OPENAI_API_KEY=" + key)
+    p.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    p.chmod(0o600)
+PY
+fi
+
 if [ -x /opt/hermes/.venv/bin/python ]; then
   /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
