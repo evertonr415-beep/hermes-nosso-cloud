@@ -18,6 +18,20 @@ RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 instal
 RUN test -x /opt/hermes/.venv/bin/hermes \
     && ln -sf /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes
 
+# Desktop-inspired skin for the browser dashboard.
+# This keeps the upstream React app/API intact and only layers our brand/theme.
+COPY hermes-desktop-theme.css /opt/hermes/hermes_cli/web_dist/hermes-desktop-theme.css
+RUN python3 - <<'PY'
+from pathlib import Path
+p = Path("/opt/hermes/hermes_cli/web_dist/index.html")
+text = p.read_text(encoding="utf-8")
+marker = '<link rel="stylesheet" href="/hermes-desktop-theme.css" />'
+if marker not in text:
+    text = text.replace("</head>", f"    {marker}\n  </head>")
+text = text.replace("<title>Hermes Agent - Dashboard</title>", "<title>Hermes Nosso</title>")
+p.write_text(text, encoding="utf-8")
+PY
+
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
 COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
