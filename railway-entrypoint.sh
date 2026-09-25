@@ -10,7 +10,7 @@ rm -f /opt/data/scripts/hermes_smoke_cron.py
 
 if [ "${HERMES_STORAGE_CLEANUP:-0}" = "1" ]; then
   echo "[storage-cleanup] removing disposable caches only"
-  rm -rf /opt/data/home/.npm/_cacache /opt/data/home/.npm/_logs
+  rm -rf /opt/data/home/.npm/_cacache /opt/data/home/.npm/_logs /opt/data/home/.npm/_npx
   rm -rf /opt/data/home/.cache/*
   rm -rf /opt/data/cache/scratch/*
   echo "[storage-cleanup] after cleanup"
