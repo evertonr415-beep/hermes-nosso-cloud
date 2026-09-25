@@ -8,6 +8,15 @@ rm -rf /opt/data/smoke
 rm -f /opt/data/workspace/hermes-smoke-file.txt
 rm -f /opt/data/scripts/hermes_smoke_cron.py
 
+if [ "${HERMES_STORAGE_CLEANUP:-0}" = "1" ]; then
+  echo "[storage-cleanup] removing disposable caches only"
+  rm -rf /opt/data/home/.npm/_cacache /opt/data/home/.npm/_logs
+  rm -rf /opt/data/home/.cache/*
+  rm -rf /opt/data/cache/scratch/*
+  echo "[storage-cleanup] after cleanup"
+  df -h /opt/data || true
+fi
+
 if [ "${HERMES_STORAGE_AUDIT:-0}" = "1" ]; then
   echo "[storage-audit] df"
   df -h /opt/data || true
