@@ -10,7 +10,7 @@ RUN base64 -d /tmp/custom-skills.tar.gz.b64 | tar -xz -C /opt/hermes/skills \
     && rm -f /tmp/custom-skills.tar.gz.b64
 
 # Lightweight S3 client for private Railway bucket backups.
-RUN uv_bin="$(python3 -c 'from pm import installed_package; print(installed_package("uv").binary)')" && "$uv_bin" pip install --python /opt/hermes/.venv/bin/python boto3
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 && rm -rf /var/lib/apt/lists/*
 
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
