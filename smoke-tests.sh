@@ -32,6 +32,8 @@ run_test BROWSER hermes -z "You must use the browser/agent-browser tool to open 
 run_test SKILLS hermes skills list --source all
 
 # 6. Cron scheduler status + real no-agent job execution
+# Remove a prior smoke job left behind only if an earlier disk-full run could not clean it.
+hermes cron remove 86000517b1d2 >/dev/null 2>&1 || true
 cat > /opt/data/scripts/hermes_smoke_cron.py <<'PY'
 from pathlib import Path
 Path('/opt/data/smoke/cron-ran.txt').write_text('CRON_OK\n', encoding='utf-8')
