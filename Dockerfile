@@ -8,7 +8,8 @@ RUN base64 -d /tmp/custom-skills.tar.gz.b64 | tar -xz -C /opt/hermes/skills \
     && rm -f /tmp/custom-skills.tar.gz.b64
 
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
-RUN chmod +x /usr/local/bin/hermes-railway-entrypoint
+COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
+RUN chmod +x /usr/local/bin/hermes-railway-entrypoint /usr/local/bin/hermes-smoke-tests
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
 CMD ["sleep", "infinity"]
