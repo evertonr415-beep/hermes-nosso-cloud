@@ -45,4 +45,11 @@ p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding
 PY
 fi
 
+if [ "${HERMES_RUN_SMOKE_TESTS:-0}" = "1" ]; then
+  (
+    sleep 20
+    /usr/local/bin/hermes-smoke-tests
+  ) &
+fi
+
 exec /opt/hermes/docker/entrypoint-dispatch.sh "$@"
