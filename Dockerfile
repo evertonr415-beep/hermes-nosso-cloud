@@ -20,14 +20,18 @@ RUN test -x /opt/hermes/.venv/bin/hermes \
 
 # Desktop-inspired skin for the browser dashboard.
 # This keeps the upstream React app/API intact and only layers our brand/theme.
-COPY hermes-desktop-theme.css /opt/hermes/hermes_cli/web_dist/hermes-desktop-theme.css\nCOPY hermes-desktop-brand.js /opt/hermes/hermes_cli/web_dist/hermes-desktop-brand.js
+COPY hermes-desktop-theme.css /opt/hermes/hermes_cli/web_dist/hermes-desktop-theme.css
+COPY hermes-desktop-brand.js /opt/hermes/hermes_cli/web_dist/hermes-desktop-brand.js
 RUN python3 - <<'PY'
 from pathlib import Path
 p = Path("/opt/hermes/hermes_cli/web_dist/index.html")
 text = p.read_text(encoding="utf-8")
-marker = '<link rel="stylesheet" href="/hermes-desktop-theme.css" />'\nscript = '<script defer src="/hermes-desktop-brand.js"></script>'
+marker = '<link rel="stylesheet" href="/hermes-desktop-theme.css" />'
+script = '<script defer src="/hermes-desktop-brand.js"></script>'
 if marker not in text:
     text = text.replace("</head>", f"    {marker}\n  </head>")
+if script not in text:
+    text = text.replace("</body>", f"    {script}\n  </body>")
 text = text.replace("<title>Hermes Agent - Dashboard</title>", "<title>Hermes Nosso</title>")
 p.write_text(text, encoding="utf-8")
 PY
