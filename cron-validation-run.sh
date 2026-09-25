@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/command/with-contenv sh
 set -eu
 
 if [ "${HERMES_CRON_VALIDATE:-0}" != "1" ]; then
