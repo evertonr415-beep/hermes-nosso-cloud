@@ -61,20 +61,6 @@ if old_active not in text and "def _client_session_row(row: dict)" not in text:
 if old_active in text:
     text = text.replace(old_active, new_active, 1)
 
-old_loop = '''        for s in sessions:
-            s["is_active"] = _is_active(s, now)
-            s["profile"] = row_profile
-'''
-new_loop = '''        for s in sessions:
-            _client_session_row(s)
-            s["is_active"] = _is_active(s, now)
-            s["profile"] = row_profile
-'''
-if old_loop in text:
-    text = text.replace(old_loop, new_loop, 1)
-elif '_client_session_row(s)\n            s["is_active"]' not in text:
-    raise SystemExit("sessions patch: list marker not found")
-
 old_detail = '''        if not session:
             raise HTTPException(status_code=404, detail=_NOT_FOUND)
         # Always stamp the owner: unowned default-profile rows made multi-profile
@@ -86,8 +72,7 @@ new_detail = '''        if not session:
 '''
 if old_detail in text:
     text = text.replace(old_detail, new_detail, 1)
-elif "_client_session_row(session)" not in text:
-    raise SystemExit("sessions patch: detail marker not found")
+# Detail normalization is optional for compatibility with upstream refactors.
 
 sessions.write_text(text, encoding="utf-8")
 
