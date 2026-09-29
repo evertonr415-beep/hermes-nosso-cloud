@@ -51,6 +51,24 @@ if key:
 PY
 fi
 
+# Keep the dashboard on a single stable profile. The temporary Matrix test
+# profile is preserved as a backup but removed from profile multiplexing.
+if [ -d /opt/data/profiles/matrixisolado ]; then
+  mkdir -p /opt/data/backups/profiles-disabled
+  if [ ! -e /opt/data/backups/profiles-disabled/matrixisolado ]; then
+    mv /opt/data/profiles/matrixisolado /opt/data/backups/profiles-disabled/matrixisolado
+    echo "[profile-recovery] moved matrixisolado to backup"
+  else
+    rm -rf /opt/data/profiles/matrixisolado
+    echo "[profile-recovery] removed duplicate matrixisolado after backup already existed"
+  fi
+fi
+
+if command -v hermes >/dev/null 2>&1; then
+  hermes profile use default >/dev/null 2>&1 || true
+  echo "[profile-recovery] active profile requested: default"
+fi
+
 if [ -x /opt/hermes/.venv/bin/python ]; then
   /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
