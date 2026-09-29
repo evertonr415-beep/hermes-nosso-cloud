@@ -18,6 +18,13 @@ RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 instal
 RUN test -x /opt/hermes/.venv/bin/hermes \
     && ln -sf /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes
 
+# Defensive compatibility layer for the current upstream dashboard.
+# It normalizes session metadata at the HTTP boundary and clears only stale
+# browser-side chat/session state once; it never mutates state.db.
+COPY patch-hermes-web-runtime.py /tmp/patch-hermes-web-runtime.py
+RUN python3 /tmp/patch-hermes-web-runtime.py \
+    && rm -f /tmp/patch-hermes-web-runtime.py
+
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
 COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
