@@ -1,0 +1,20 @@
+FROM tailscale/tailscale:v1.102.3
+
+RUN apk add --no-cache python3
+
+COPY tailscale-gateway-proxy.py /opt/hermes-gateway/proxy.py
+COPY start-tailscale-gateway.sh /usr/local/bin/start-tailscale-gateway
+RUN chmod +x /usr/local/bin/start-tailscale-gateway
+
+ENV TS_USERSPACE=true \
+    TS_SOCKS5_SERVER=127.0.0.1:1055 \
+    TS_OUTBOUND_HTTP_PROXY_LISTEN=127.0.0.1:1056 \
+    TS_STATE_DIR=/var/lib/tailscale \
+    TS_AUTH_ONCE=true \
+    TS_HOSTNAME=hermes-railway-gateway \
+    HERMES_LOCAL_TARGET=http://100.91.1.35:8642
+
+EXPOSE 8642
+
+ENTRYPOINT []
+CMD ["/usr/local/bin/start-tailscale-gateway"]
