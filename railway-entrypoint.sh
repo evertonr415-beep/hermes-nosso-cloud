@@ -82,8 +82,18 @@ providers["matrix"] = {
     "api": "https://matrix.dgsis.com.br/v1",
     "key_env": "MATRIX_API_KEY",
     "transport": "chat_completions",
+    "discover_models": True,
     "models": {
         "claude-opus-5": {},
+    },
+}
+providers["hermes-local"] = {
+    "name": "Hermes Local",
+    "api": "http://hermes-chatgpt-bridge.railway.internal:8642/v1",
+    "key_env": "HERMES_LOCAL_API_KEY",
+    "transport": "chat_completions",
+    "models": {
+        "hermes-agent": {},
     },
 }
 web = data.setdefault("web", {})
