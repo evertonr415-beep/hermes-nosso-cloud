@@ -73,6 +73,19 @@ data["fallback_providers"] = [
     {"provider": "openai-codex", "model": "gpt-6-sol"},
     {"provider": "openai-codex", "model": "gpt-5.6-sol"},
 ]
+providers = data.setdefault("providers", {})
+if not isinstance(providers, dict):
+    providers = {}
+    data["providers"] = providers
+providers["matrix"] = {
+    "name": "Matrix",
+    "api": "https://matrix.dgsis.com.br/v1",
+    "key_env": "MATRIX_API_KEY",
+    "transport": "chat_completions",
+    "models": {
+        "claude-opus-5": {},
+    },
+}
 web = data.setdefault("web", {})
 if isinstance(web, dict):
     web.setdefault("keyless_fallback", True)
@@ -100,6 +113,60 @@ if [ "${HERMES_MODEL_VALIDATE:-0}" = "1" ]; then
       rc=$?
       echo "[model-validate] command-failed rc=$rc"
     fi
+  ) &
+fi
+
+if [ "${HERMES_MATRIX_VALIDATE:-0}" = "1" ] && [ -n "${MATRIX_API_KEY:-}" ]; then
+  (
+    sleep 15
+    /opt/hermes/.venv/bin/python - <<'PY'
+import json, os, urllib.request, urllib.error
+base = "https://matrix.dgsis.com.br"
+key = os.environ.get("MATRIX_API_KEY", "")
+model = "claude-opus-5"
+
+def call(path, payload=None):
+    headers = {"Authorization": "Bearer " + key, "Accept": "application/json"}
+    data = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(base + path, data=data, headers=headers,
+                                 method="POST" if data else "GET")
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            return resp.status, resp.read(1024 * 1024)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read(8192)
+    except Exception as exc:
+        print("[matrix-validate] network-error type=" + type(exc).__name__)
+        return None, b""
+
+status, body = call("/v1/models")
+present = False
+if status == 200:
+    try:
+        payload = json.loads(body)
+        ids = [str(x.get("id", "")) for x in payload.get("data", []) if isinstance(x, dict)]
+        present = model in ids
+    except Exception:
+        pass
+print(f"[matrix-validate] models-status={status} model-present={str(present).lower()}")
+
+chat_status, chat_body = call("/v1/chat/completions", {
+    "model": model,
+    "messages": [{"role": "user", "content": "Reply only OK"}],
+    "max_tokens": 4,
+    "temperature": 0,
+})
+returned_model = ""
+if chat_status == 200:
+    try:
+        returned_model = str(json.loads(chat_body).get("model", ""))
+    except Exception:
+        pass
+print(f"[matrix-validate] chat-status={chat_status} returned-model={returned_model[:100]}")
+PY
   ) &
 fi
 
