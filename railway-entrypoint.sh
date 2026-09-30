@@ -124,6 +124,14 @@ providers["hermes-local"] = {
         "hermes-agent": {},
     },
 }
+
+skills_cfg = data.setdefault("skills", {})
+always_load = skills_cfg.get("always_load")
+if not isinstance(always_load, list):
+    always_load = []
+router_skill = "hermes-nosso-router"
+skills_cfg["always_load"] = [router_skill] + [s for s in always_load if s != router_skill]
+
 web = data.setdefault("web", {})
 if isinstance(web, dict):
     web.setdefault("keyless_fallback", True)
