@@ -1,7 +1,7 @@
 ---
 name: hermes-nosso-router
 description: "Deterministic intent router for Hermes Nosso. Maps each request to the smallest relevant installed skill set."
-version: 2.0.0
+version: 2.0.1
 tags: [router, skills, orchestration, hermes-nosso, intent-routing]
 ---
 
