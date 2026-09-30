@@ -43,7 +43,7 @@ def generate_image(prompt, model="gpt-image-2", size="1024x1024"):
 def hermes_chat(prompt):
     payload=json.dumps({"model":"gpt-5.6-sol","messages":[{"role":"user","content":prompt}],"stream":False}).encode()
     req=urllib.request.Request(UPSTREAM+"/v1/chat/completions",data=payload,method="POST",headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
-    with urllib.request.urlopen(req,timeout=900) as res:
+    with urllib.request.urlopen(req,timeout=75) as res:
         data=json.load(res)
     return data["choices"][0]["message"]["content"]
 
