@@ -53,6 +53,10 @@ button,input,textarea,select{font:inherit}
 .assistant .bubble{padding:2px 0}
 .role{font-size:12px;color:var(--muted);margin-bottom:5px}
 .tool{font-size:12px;color:#8b5e00;background:#fff6d8;border:1px solid #f1df9e;border-radius:8px;padding:7px 9px;margin:6px 0}
+.routebadges{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 7px}
+.routebadge{font-size:11px;line-height:1;border:1px solid #deded8;background:#f6f6f3;color:#555b63;border-radius:999px;padding:5px 7px}
+.routebadge.provider{background:#eef5ff;border-color:#d7e5fb;color:#34506f}
+.routebadge.skill{background:#f5f0ff;border-color:#e4d8fb;color:#5b3d86}
 .composerbar{position:fixed;left:260px;right:0;bottom:0;padding:18px 22px 24px;background:linear-gradient(transparent,var(--bg) 32%)}
 .composer{max-width:820px;margin:0 auto;background:#fff;border:1px solid #dadad6;border-radius:18px;box-shadow:var(--shadow);padding:9px 10px 9px 14px;display:flex;align-items:flex-end;gap:8px}
 textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180px;padding:8px 2px;background:transparent;line-height:1.45}
@@ -114,7 +118,7 @@ function renderHistory(){
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>'+routeHtml(m):'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
@@ -129,7 +133,7 @@ async function submit(){
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)'});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
 }
@@ -214,6 +218,58 @@ def bridge_smoke():
         print(f"[hermes-simple] bridge-chat error={type(e).__name__}", flush=True)
 
 
+def classify_route(text, route="auto"):
+    """Best-effort display metadata only; execution still happens in Hermes."""
+    t = (text or "").lower()
+
+    def has(*terms):
+        return any(term in t for term in terms)
+
+    category, skill, provider = "Geral", "", ""
+    if has("vídeo", "video", "animar", "animação", "reels", "shorts"):
+        category = "Vídeo"
+        if has("matem", "equação", "algorit", "explicativo", "explicação técnica", "3blue1brown"):
+            skill, provider = "manim-video", "Manim"
+        else:
+            skill, provider = "video-generation", "Runway/externo"
+    elif has("imagem", "foto", "foto ", "editar foto", "remover fundo", "recortar", "upscale"):
+        category, skill, provider = "Imagem", "image-editing", "Gerador de imagem"
+    elif has("gráfico", "grafico", "dashboard", "estatística", "estatistica", "plot"):
+        category, skill, provider = "Dados", "jupyter-live-kernel", "Python/Jupyter"
+    elif has("excel", "xlsx", "planilha"):
+        category, skill, provider = "Planilha", "xlsx", "Excel"
+    elif has("site", "website", "landing page", "frontend", "web app", "página web", "pagina web"):
+        category, skill, provider = "Site", "popular-web-designs", "Web/Vercel"
+    elif has("supabase", "autenticação", "autenticacao", "login", "rls", "postgres"):
+        category, skill, provider = "Backend", "supabase", "Supabase"
+    elif has("github", "pull request", " pr ", "issue", "repositório", "repositorio"):
+        category, skill, provider = "Código", "github", "GitHub"
+    elif has("pdf"):
+        category, skill, provider = "Documento", "pdf", "PDF"
+    elif has("docx", "word"):
+        category, skill, provider = "Documento", "docx", "Word"
+    elif has("powerpoint", "pptx", "slides", "apresentação", "apresentacao"):
+        category, skill, provider = "Apresentação", "powerpoint", "PowerPoint"
+    elif has("mapa", "endereços", "enderecos", "geográfico", "geografico"):
+        category, skill, provider = "Mapa", "maps", "Mapas"
+    elif has("pesquise", "pesquisar", "pesquisa", "procure na web", "notícias", "noticias"):
+        category, skill, provider = "Pesquisa", "web-research", "Web"
+    elif has("navegador", "browser", "clique", "preencha", "interface"):
+        category, skill, provider = "Automação", "computer-use", "Browser"
+    elif has("música", "musica", "áudio", "audio", "som", "efeito sonoro", "voz"):
+        category, skill, provider = "Áudio", "songwriting-and-ai-music", "Áudio/externo"
+    elif has("código", "codigo", "bug", "erro", "debug", "programa", "script"):
+        category, skill, provider = "Código", "systematic-debugging", "Hermes"
+
+    if route == "matrix":
+        provider = "Matrix" if category == "Geral" else provider
+    elif route == "local":
+        provider = "Hermes Local" if category == "Geral" else provider
+    elif route == "auto" and category == "Geral":
+        provider = "GPT-6 Sol"
+
+    return {"category": category, "skill": skill, "provider": provider}
+
 def response_text(data):
     parts=[]
     for item in data.get("output",[]) or []:
@@ -274,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
             out=response_text(data)
             if not out:
                 out="O Hermes concluiu a execução, mas não retornou texto."
-            return self.sendb(200,json.dumps({"text":out,"via":via},ensure_ascii=False))
+            return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":classify_route(text, route)},ensure_ascii=False))
         except Exception as e:
             print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:500],flush=True)
             return self.sendb(502,json.dumps({"error":"Não consegui falar com o Hermes agora. Tente novamente.","type":type(e).__name__},ensure_ascii=False))
