@@ -1,4 +1,4 @@
-import base64, hmac, json, os, time, urllib.request, urllib.error
+import base64, hmac, json, os, time, threading, urllib.request, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -172,6 +172,48 @@ def call_upstream(payload):
         raw = e.read(8192)
         raise RuntimeError(f"bridge HTTP {e.code}: " + raw.decode("utf-8","ignore")[:400]) from e
 
+def bridge_smoke():
+    """One bounded startup self-test. Never logs credentials."""
+    if not BRIDGE_KEY:
+        print("[hermes-simple] bridge-smoke skipped: missing bridge key", flush=True)
+        return
+    try:
+        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/models", headers={
+            "Authorization": "Bearer " + BRIDGE_KEY,
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=15) as res:
+            data = json.load(res)
+        models_ok = bool(data.get("data"))
+        print(f"[hermes-simple] bridge-models status=200 models_ok={str(models_ok).lower()}", flush=True)
+    except urllib.error.HTTPError as e:
+        print(f"[hermes-simple] bridge-models status={e.code}", flush=True)
+        return
+    except Exception as e:
+        print(f"[hermes-simple] bridge-models error={type(e).__name__}", flush=True)
+        return
+
+    try:
+        body = json.dumps({
+            "model": "hermes-agent",
+            "messages": [{"role": "user", "content": "Reply only: HERMES_SIMPLE_OK"}],
+            "stream": False,
+        }).encode("utf-8")
+        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/chat/completions", data=body, method="POST", headers={
+            "Authorization": "Bearer " + BRIDGE_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        })
+        with urllib.request.urlopen(req, timeout=90) as res:
+            data = json.load(res)
+        text = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""))
+        print(f"[hermes-simple] bridge-chat status=200 ok={str('HERMES_SIMPLE_OK' in text).lower()}", flush=True)
+    except urllib.error.HTTPError as e:
+        print(f"[hermes-simple] bridge-chat status={e.code}", flush=True)
+    except Exception as e:
+        print(f"[hermes-simple] bridge-chat error={type(e).__name__}", flush=True)
+
+
 def response_text(data):
     parts=[]
     for item in data.get("output",[]) or []:
@@ -241,4 +283,5 @@ if __name__=="__main__":
     if not PASSWORD:
         raise SystemExit("HERMES_DASHBOARD_BASIC_AUTH_PASSWORD missing")
     print(f"[hermes-simple] listening on 0.0.0.0:{PORT}",flush=True)
+    threading.Thread(target=bridge_smoke, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
