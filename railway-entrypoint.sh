@@ -36,16 +36,26 @@ then
   rm -f /opt/data/gateway_state.json
 fi
 
-if [ -n "${OPENAI_API_KEY:-}" ]; then
+if [ -n "${OPENAI_API_KEY:-}" ] || [ -n "${API_SERVER_KEY:-}" ]; then
   /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
 import os
 p = Path("/opt/data/.env")
-key = os.environ.get("OPENAI_API_KEY", "").strip()
-if key:
-    lines = p.read_text(encoding="utf-8").splitlines() if p.exists() else []
-    kept = [line for line in lines if not line.startswith("OPENAI_API_KEY=")]
-    kept.append("OPENAI_API_KEY=" + key)
+lines = p.read_text(encoding="utf-8").splitlines() if p.exists() else []
+
+updates = {}
+for name in ("OPENAI_API_KEY", "API_SERVER_KEY"):
+    value = os.environ.get(name, "").strip()
+    if value:
+        updates[name] = value
+
+if updates:
+    kept = [
+        line for line in lines
+        if not any(line.startswith(name + "=") for name in updates)
+    ]
+    for name, value in updates.items():
+        kept.append(name + "=" + value)
     p.write_text("\n".join(kept) + "\n", encoding="utf-8")
     p.chmod(0o600)
 PY
