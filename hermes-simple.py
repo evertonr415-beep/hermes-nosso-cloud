@@ -156,30 +156,21 @@ def auth_ok(headers):
         return False
 
 def call_upstream(payload):
+    """Use the isolated bridge as the single stable chat path."""
+    if not BRIDGE_KEY:
+        raise RuntimeError("Bridge Hermes não configurado")
     body = json.dumps(payload).encode("utf-8")
-    attempts = []
-    if DIRECT_KEY:
-        attempts.append((DIRECT_UPSTREAM + "/v1/responses", DIRECT_KEY, "direct"))
-    if BRIDGE_KEY:
-        attempts.append((BRIDGE_UPSTREAM + "/v1/responses", BRIDGE_KEY, "bridge"))
-    last = None
-    for url, key, name in attempts:
-        req = urllib.request.Request(url, data=body, method="POST", headers={
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        })
-        try:
-            with urllib.request.urlopen(req, timeout=900) as res:
-                return json.load(res), name
-        except urllib.error.HTTPError as e:
-            raw = e.read(8192)
-            last = RuntimeError(f"{name} HTTP {e.code}: " + raw.decode("utf-8","ignore")[:400])
-            if e.code < 500:
-                break
-        except Exception as e:
-            last = e
-    raise last or RuntimeError("Nenhum backend Hermes disponível")
+    req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/responses", data=body, method="POST", headers={
+        "Authorization": "Bearer " + BRIDGE_KEY,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=900) as res:
+            return json.load(res), "bridge"
+    except urllib.error.HTTPError as e:
+        raw = e.read(8192)
+        raise RuntimeError(f"bridge HTTP {e.code}: " + raw.decode("utf-8","ignore")[:400]) from e
 
 def response_text(data):
     parts=[]
