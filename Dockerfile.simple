@@ -1,0 +1,5 @@
+FROM python:3.12-alpine
+WORKDIR /app
+COPY hermes-simple.py /app/hermes-simple.py
+EXPOSE 9119
+CMD ["python","/app/hermes-simple.py"]
