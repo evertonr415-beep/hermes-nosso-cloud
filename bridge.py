@@ -17,14 +17,14 @@ POST_PATHS={"/v1/chat/completions","/v1/responses","/v1/runs"}
 def generate_image(prompt, model="gpt-image-2", size="1024x1024"):
     if not OPENAI_KEY:
         raise RuntimeError("OPENAI_API_KEY missing")
-    payload=json.dumps({"model":model,"prompt":prompt,"size":size}).encode()
+    print(f"[image] generation start model={model} size={size}",flush=True)\n    payload=json.dumps({"model":model,"prompt":prompt,"size":size}).encode()
     req=urllib.request.Request(
         "https://api.openai.com/v1/images/generations",
         data=payload,
         method="POST",
         headers={"Authorization":"Bearer "+OPENAI_KEY,"Content-Type":"application/json","Accept":"application/json"}
     )
-    with urllib.request.urlopen(req,timeout=900) as res:
+    with urllib.request.urlopen(req,timeout=75) as res:
         data=json.load(res)
     item=(data.get("data") or [{}])[0]
     b64=item.get("b64_json")
