@@ -1,10 +1,11 @@
-import os, json, urllib.request, urllib.error
+import os, json, urllib.request, urllib.error, hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 UPSTREAM=os.getenv("HERMES_UPSTREAM","http://127.0.0.1:8642").rstrip("/")
 PORT=int(os.getenv("PORT",os.getenv("BRIDGE_PORT","9120")))
 HERMES_KEY=os.getenv("API_SERVER_KEY","")
 BRIDGE_KEY=os.getenv("HERMES_BRIDGE_KEY","")
+SIMPLE_BRIDGE_KEY=os.getenv("HERMES_SIMPLE_BRIDGE_KEY","")
 GET_PATHS={"/health/detailed","/v1/models","/v1/skills","/v1/toolsets"}
 POST_PATHS={"/v1/chat/completions","/v1/responses","/v1/runs"}
 
@@ -22,7 +23,11 @@ class Handler(BaseHTTPRequestHandler):
         if isinstance(body,str): body=body.encode()
         self.send_response(status); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
     def authorized(self):
-        return bool(BRIDGE_KEY) and self.headers.get("Authorization","")=="Bearer "+BRIDGE_KEY
+        presented=self.headers.get("Authorization","")
+        allowed=[]
+        if BRIDGE_KEY: allowed.append("Bearer "+BRIDGE_KEY)
+        if SIMPLE_BRIDGE_KEY: allowed.append("Bearer "+SIMPLE_BRIDGE_KEY)
+        return any(hmac.compare_digest(presented, expected) for expected in allowed)
     def mcp(self):
         if not self.authorized(): return self.reply(401,b'{"error":"unauthorized"}')
         try:
@@ -67,6 +72,6 @@ class Handler(BaseHTTPRequestHandler):
     do_POST=proxy
 
 if __name__=="__main__":
-    if not HERMES_KEY or not BRIDGE_KEY: raise SystemExit("bridge credentials missing")
+    if not HERMES_KEY or not (BRIDGE_KEY or SIMPLE_BRIDGE_KEY): raise SystemExit("bridge credentials missing")
     print("[hermes-bridge] MCP endpoint enabled at /mcp",flush=True)
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
