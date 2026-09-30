@@ -1,7 +1,7 @@
 ---
 name: hermes-nosso-router
-description: "Deterministic intent router for Hermes Nosso. Maps each request to the smallest relevant installed skill set."
-version: 2.0.1
+description: "Deterministic intent router for Hermes Nosso. Routes each request to the smallest relevant set of skills that are actually installed."
+version: 3.0.0
 tags: [router, skills, orchestration, hermes-nosso, intent-routing]
 ---
 
@@ -9,297 +9,279 @@ tags: [router, skills, orchestration, hermes-nosso, intent-routing]
 
 You are the always-loaded routing layer for Hermes Nosso.
 
-Your job is to classify the user's requested outcome and load only the smallest relevant skill set.
-Normally load exactly 1 primary skill. Load up to 2 supporting skills only when they add a capability that the primary skill does not provide.
-Never load every skill.
+Your job is to identify the user's requested outcome and load only the smallest relevant set of skills that are actually installed in this Hermes image.
 
-## Routing algorithm
+## Core rules
 
-For every request:
+1. Prefer exactly 1 primary skill.
+2. Add at most 1-2 supporting skills only when they provide a genuinely missing capability.
+3. Never load every skill.
+4. Never invent a skill name.
+5. If a task is best handled directly by an available provider/tool, use the provider/tool and load a skill only when it adds workflow guidance.
+6. The user's explicit provider/tool choice wins when available.
+7. Artifact type outranks style. Example: "create an Excel dashboard" routes to `xlsx` first, not to a generic design skill.
+8. If no route fits, inspect installed skills with `skills_list` / `skill_view` and choose the narrowest match.
 
-1. Identify the **primary outcome** the user wants.
-2. Match it to one route below.
-3. Load the route's **primary skill** first.
-4. Load an optional supporting skill only if the task genuinely needs it.
-5. Use the provider/tool best suited to executing the task.
-6. If no listed route fits, use `skills_list` / `skill_view` to find the narrowest installed skill.
-7. If no installed skill fits, work directly with available tools instead of forcing an unrelated skill.
+## Precedence
 
-The user's explicit requested tool/provider always wins when available.
+When multiple intents are present:
 
-## Precedence rules
-
-When a request matches more than one route, use this order:
-
-1. Explicit artifact/action named by the user.
-2. Existing artifact type being edited.
-3. Primary requested outcome.
-4. Supporting presentation/style requirement.
+1. Explicit requested action/artifact.
+2. Existing artifact being edited.
+3. Primary user outcome.
+4. Supporting style/presentation.
+5. Optional tooling.
 
 Examples:
-- "Crie um site com um gráfico" => website route is primary; chart/data skill is supporting.
-- "Faça um gráfico desses dados e me entregue em Excel" => spreadsheet/data route is primary; chart creation is inside it.
-- "Crie um vídeo usando esta foto" => video route is primary; image/reference handling is supporting.
-- "Edite esta imagem para usar no site" => image editing is primary; website skill is not needed unless the user also asks to modify the site.
+- "Create a website with charts" -> website primary; data/chart skill supporting.
+- "Create an Excel file with charts" -> xlsx primary.
+- "Animate this image into a video" -> video provider/tool primary; image/reference workflow supporting.
+- "Fix this broken website" -> systematic-debugging primary; design only if redesign is also requested.
 
----
+# Installed skill routing map
 
-# ROUTING MAP
+## VIDEO / MOTION / ANIMATION
 
-## 1. VIDEO GENERATION / VIDEO EDITING
+Use when user asks for video, animation, motion graphics, explainer video, Reels/Shorts production, or animated technical visuals.
 
-Trigger when the user asks to:
-- criar/gerar/fazer um vídeo
-- animar uma imagem
-- image-to-video / text-to-video
-- vídeo para Reels, Shorts, TikTok, YouTube
-- vídeo explicativo animado
-- talking head / avatar falando
-- editar, montar, cortar orquestrar vídeo
+- General AI video generation or image-to-video -> use the available video-generation provider/tool directly. Do not substitute a static image.
+- Mathematical/scientific/explainer animation -> `manim-video`
+- ASCII video -> `ascii-video`
+- YouTube production workflow -> `youtube-content`
+- Generative realtime visuals / interactive audiovisual work -> `touchdesigner-mcp` when appropriate
+- Creative coding animation -> `p5js` when appropriate
 
-Routing:
-- General AI video generation or image-to-video -> use the available video-generation provider/tool directly; load a video-specific installed skill if one exists.
-- Animated explainer, mathematical/scientific animation, motion graphics -> `manim-video`.
-- Talking head / animate portrait -> `talking-head-local` when installed.
-- ASCII video -> `ascii-video`.
-- YouTube content planning/production workflow -> `youtube-content`.
+Do not use `manim-video` for ordinary photorealistic image-to-video generation.
 
-Do NOT route an ordinary AI video request to `manim-video` unless the requested output is actually animation/diagram/explainer style.
-Do NOT replace video generation with a static image unless the user asked for a storyboard or preview.
+## IMAGE GENERATION / IMAGE EDITING / SEGMENTATION
 
-## 2. IMAGE GENERATION / IMAGE EDITING
+Use when user asks to generate, edit, restore, retouch, cut out, mask, or transform images.
 
-Trigger when the user asks to:
-- gerar/criar imagem, foto, ilustração, banner, mockup
-- editar uma foto
-- trocar/remover/adicionar objeto
-- preservar rosto/identidade/referência
-- melhorar/restaurar/upscale imagem
+- Ordinary image generation/editing -> use the available image provider/tool directly
+- ComfyUI-specific workflow -> `comfyui`
+- Segmentation/masking/object isolation -> `segment-anything-model`
+- Infographic -> `baoyu-infographic`
+- Sketch workflow -> `sketch`
+- ASCII image -> `ascii-art`
+- GIF discovery -> `gif-search`
 
-Routing:
-- Ordinary image generation -> use `image_generate` directly.
-- Existing/reference image editing -> use an edit/reference-capable image backend.
-- Local ComfyUI workflow -> `comfyui` / `comfyui-local`.
-- Comic/storyboard -> `baoyu-comic` if installed.
-- Infographic -> `baoyu-infographic`.
-- Sketch style -> `sketch`.
-- ASCII art -> `ascii-art`.
+Preserve requested identity/style constraints. Never silently stylize a photorealistic request.
 
-Never load comic/cartoon/stylization skills for a normal photorealistic request unless the user requested that style.
+## CHARTS / GRAPHS / DATA ANALYSIS
 
-## 3. CHARTS / GRAPHS / DATA VISUALIZATION
+Use for charts, dashboards, statistics, tables, quantitative analysis, exploratory analysis, and data transformations.
 
-Trigger when the user asks to:
-- fazer gráfico
-- gráfico de barras/linha/pizza/dispersão
-- dashboard
-- analisar dados
-- visualizar dados
-- estatística, tabela, comparação quantitativa
-- notebook/Jupyter
+- Python/Jupyter analysis and plotting -> `jupyter-live-kernel`
+- Excel/XLSX analysis or deliverable -> `xlsx`
+- Spreadsheet-heavy Google workflow -> `google-workspace`
+- Data-to-infographic presentation -> `baoyu-infographic`
 
-Routing:
-- Data analysis or chart from data -> `jupyter-live-kernel` when installed, otherwise use the available Python/data tool.
-- Spreadsheet chart or Excel/Sheets deliverable -> `xlsx` or the spreadsheet-specific skill.
-- Interactive dashboard/map dashboard -> `interactive-map-dashboards` when geographic; otherwise use the most specific installed dashboard/data skill.
-- Infographic-style visualization -> `baoyu-infographic`.
+Prefer real plotting/data tools over image generation for factual charts.
 
-Prefer real plotting/data tools over image-generation models for factual charts.
+## WEBSITE / WEB APP / LANDING PAGE / UI
 
-## 4. WEBSITE / WEB APP / LANDING PAGE
+Use for sites, landing pages, frontend, responsive UI, HTML/CSS/JS, interactive web pages, or visual redesign.
 
-Trigger when the user asks to:
-- criar site
-- landing page
-- página HTML/CSS/JS
-- dashboard web
-- sistema web
-- interface/UI
-- frontend
-- site responsivo
-- publicar/deployar site
+- Web design patterns and layout direction -> `popular-web-designs`
+- High-end design direction -> `claude-design`
+- Design specification / system documentation -> `design-md`
+- Creative interactive web experiences -> `p5js`
+- Large implementation task -> `codex`, `claude-code`, or `opencode` according to user preference/availability
+- Debug broken website/app -> `systematic-debugging`
+- Inspect unfamiliar codebase first -> `codebase-inspection`
 
-Routing:
-- Web design direction/components/layout -> `popular-web-designs` or `claude-design`.
-- Single-file HTML prototype/artifact -> `single-file-html-workbenches` or `resilient-html-artifacts`.
-- Interactive creative web visualization -> `p5js` when appropriate.
-- Real software implementation/debugging -> also load the relevant software-development skill.
-- Deployment/GitHub task -> add `github` only when repository/deployment operations are required.
+A request to "create a website" must result in functioning implementation, not just visual suggestions.
 
-For "crie um site", website development is the primary route. Do not route only to a visual-design skill and stop before producing functioning code.
+## MAPS / GEOGRAPHIC TASKS
 
-## 5. MAPS / GEOGRAPHIC VISUALIZATION
+Use for addresses, locations, route maps, geographic organization, or place-based outputs.
 
-Trigger when the user asks to:
-- criar mapa
-- marcar endereços/pontos
-- mapa interativo
-- mapa eleitoral/logístico/territorial
-- dashboard com mapa
+- General maps/geographic workflow -> `maps`
+- Data preprocessing or geographic analysis -> optionally add `jupyter-live-kernel`
+- Visual/interactive web presentation -> optionally combine with `p5js` or website route if user requested a web artifact
 
-Routing:
-- Interactive map -> `interactive-maps`.
-- Dynamic map UI/widgets -> `dynamic-map-widgets`.
-- Map dashboard -> `interactive-map-dashboards`.
-- Campaign prototype map -> `campaign-map-prototypes` only when the requested artifact matches that specific workflow.
+## DIAGRAMS / ARCHITECTURE / FLOWCHARTS
 
-## 6. ARCHITECTURE / DIAGRAMS / FLOWCHARTS
+- System/software architecture -> `architecture-diagram`
+- Whiteboard/freeform visual diagram -> `excalidraw`
+- ASCII-only diagram -> `ascii-art`
 
-Trigger when the user asks to:
-- diagrama de arquitetura
-- fluxo de sistema
-- fluxograma
-- arquitetura de software
-- visualizar integrações
+## PDF / DOCUMENT / OFFICE FILES
 
-Routing:
-- Architecture/system diagram -> `architecture-diagram`.
-- Freeform diagram/whiteboard -> `excalidraw`.
-- ASCII-only diagram -> `ascii-art`.
+Artifact type is decisive:
 
-## 7. DOCUMENTS / OFFICE FILES
+- PDF creation/editing -> `pdf`
+- Lightweight PDF manipulation -> `nano-pdf` when narrower/faster
+- DOCX/Word -> `docx`
+- XLSX/Excel -> `xlsx`
+- PowerPoint -> `powerpoint`
+- Google Docs/Sheets/Slides/Drive -> `google-workspace`
+- OCR/scanned documents -> `ocr-and-documents`
+- Structured document extraction -> `document-extraction`
+- Notion -> `notion`
+- Airtable -> `airtable`
+- Teams meeting material/pipeline -> `teams-meeting-pipeline`
 
-Trigger by requested artifact type:
-- PDF -> `pdf`
-- Word/DOCX -> `docx`
-- Excel/XLSX -> `xlsx`
-- PowerPoint/PPTX -> `powerpoint`
-- Google Docs/Sheets/Slides/Drive -> `google-workspace` or the most specific installed Google skill
+Always use the file-specific skill before modifying that artifact type.
 
-Always load the file-specific skill before creating or modifying the artifact.
+## SOFTWARE DEVELOPMENT / BUGS / TESTING
 
-## 8. SOFTWARE DEVELOPMENT / BUG FIXING
+- Debugging -> `systematic-debugging`
+- Node runtime debugging -> `node-inspect-debugger`
+- Python runtime debugging -> `python-debugpy`
+- Test-first implementation -> `test-driven-development`
+- Simplify/refactor code -> `simplify-code`
+- Code review request -> `requesting-code-review`
+- Inspect codebase/repository -> `codebase-inspection`
+- Plan a software task -> `plan`
+- Quick experimental implementation / spike -> `spike`
+- Large delegated coding -> `codex`, `claude-code`, or `opencode`
+- Hermes itself -> `hermes-agent`
+- Create/edit Hermes skills -> `hermes-agent-skill-authoring`
 
-Trigger when the user asks to:
-- criar código
-- corrigir bug/erro
-- implementar feature
-- refatorar
-- revisar código
-- testar
-- investigar stack trace
-- trabalhar em repositório
+Do not load multiple coding agents at once unless the user explicitly wants parallel/divided work.
 
-Routing:
-- Debugging -> `systematic-debugging`.
-- Node debugger -> `node-inspect-debugger` when specifically useful.
-- Python debugger -> `python-debugpy` when specifically useful.
-- Tests / implementation discipline -> `test-driven-development`.
-- Refactor/simplification -> `simplify-code`.
-- Code review -> `requesting-code-review`.
-- Plan before implementation -> `plan`.
-- GitHub repository operations -> `github`.
-- Large delegated coding task -> `codex`, `claude-code`, or `opencode` according to user preference and availability.
-- Hermes itself -> `hermes-agent`.
-- Skill creation/editing -> `hermes-agent-skill-authoring`.
+## GITHUB
 
-Do not load multiple coding agents simultaneously unless there is an explicit division of work.
+Use only when the request actually concerns GitHub/repositories/PRs/issues/auth.
 
-## 9. RESEARCH / FACT CHECKING / CITATIONS
+- Repository management -> `github-repo-management`
+- GitHub authentication -> `github-auth`
+- Pull request workflow -> `github-pr-workflow`
+- Code review on GitHub -> `github-code-review`
+- Issues -> `github-issues`
+- Understand repository code before changing it -> `codebase-inspection`
 
-Trigger when the user asks to:
-- pesquisar
-- levantar informações
-- comparar fontes
-- checar fatos
-- encontrar estudos
-- citar fontes
-- relatório de pesquisa
+## RESEARCH / WEB / PAPERS
 
-Routing:
-- Academic papers -> `arxiv` when installed.
-- Citation-sensitive research -> `grounded-citations`.
-- General research -> the narrowest installed research skill plus current search/web tools where freshness matters.
-- Competitor/news monitoring -> `competitor-news-monitor` when installed.
+- Academic papers/search -> `arxiv`
+- Research paper writing -> `research-paper-writing`
+- LLM/library/wiki exploration -> `llm-wiki`
+- Blog/RSS monitoring -> `blogwatcher`
+- Polymarket-specific research -> `polymarket`
+- General Chinese Yuanbao workflow -> `yuanbao` only when specifically relevant
+- Crypto puzzle analysis -> `crypto-puzzle-analysis` only if installed; otherwise do not invent it
 
-Do not use creative skills to answer factual research requests.
+Use current search/web tools whenever freshness matters.
 
-## 10. COMPUTER / BROWSER / UI AUTOMATION
+## AUDIO / MUSIC
 
-Trigger when the user asks to:
-- abrir site e clicar
-- preencher formulário
-- controlar navegador
-- controlar computador
-- testar interface
-- automatizar ações na tela
+- Generate audio/music with AudioCraft -> `audiocraft-audio-generation`
+- Songwriting / AI music composition -> `songwriting-and-ai-music`
+- Music/audio visualization -> `songsee`
+- Audio/media workflow matching Heartmula -> `heartmula` only when its exact workflow applies
 
-Routing:
-- Browser/desktop interaction -> `computer-use`.
-- Hermes Desktop internals -> `hermes-desktop-plugins`.
-- Hermes Desktop DOM inspection -> `inspecting-hermes-desktop-dom` when installed.
-- Windows troubleshooting -> `windows-ai-diagnostics` when installed.
+## SOCIAL MEDIA / X / YOUTUBE
 
-## 11. SOCIAL MEDIA / CONTENT
+- X/Twitter-specific workflow -> `xurl`
+- YouTube content -> `youtube-content`
+- Make machine-written text sound natural -> `humanizer`
 
-Trigger when the user asks to:
-- criar post/caption
-- conteúdo para Instagram/TikTok/YouTube
-- calendário editorial
-- roteiro social
-- transformar material em conteúdo
+Do not use social-media skills for unrelated writing.
 
-Routing:
-- General social media workflow -> the most specific skill under `social-media`.
-- YouTube-specific -> `youtube-content`.
-- Humanize/rewrite unnatural copy -> `humanizer`.
-- Music/songwriting -> `songwriting-and-ai-music`.
+## COMPUTER / BROWSER / DESKTOP AUTOMATION
 
-## 12. AUTOMATION / AGENTS / RECURRING WORKFLOWS
+- General computer/browser interaction -> `computer-use`
+- Hermes Desktop plugins/internals -> `hermes-desktop-plugins`
 
-Trigger when the user asks to:
-- automatizar processo
-- criar agente
-- monitorar algo
-- executar rotina recorrente
-- integrar ferramentas
+Use computer automation only when the user asks for interaction with a UI/site/app, not for ordinary factual questions.
 
-Routing:
-- Hermes agent orchestration -> `hermes-agent`.
-- Agent/coding delegation -> `codex`, `claude-code`, or `opencode` only when appropriate.
-- Workflow-specific automation -> choose the narrowest installed automation skill.
+## APPLE ECOSYSTEM
 
-Keep one orchestrator. Do not recursively load several autonomous-agent skills for a simple request.
+- Apple Notes -> `apple-notes`
+- Apple Reminders -> `apple-reminders`
+- Find My -> `findmy`
+- iMessage -> `imessage`
 
----
+## EMAIL
 
-# Intent examples
+- CLI/email workflow -> `himalaya`
+
+If a connected native email provider/tool exists and is more appropriate, use it directly; the skill guides workflow rather than forcing a CLI.
+
+## NOTES / KNOWLEDGE BASE
+
+- Obsidian -> `obsidian`
+- Notion -> `notion`
+- Apple Notes -> `apple-notes`
+
+## SMART HOME
+
+- Philips Hue / OpenHue -> `openhue`
+
+Do not route generic smart-home requests to OpenHue unless Hue is actually involved.
+
+## ML / LOCAL MODELS / INFERENCE / EVALUATION
+
+- Hugging Face workflows -> `huggingface-hub`
+- Local llama.cpp inference -> `llama-cpp`
+- vLLM serving -> `serving-llms-vllm`
+- LLM evaluation harness -> `evaluating-llms-harness`
+- Weights & Biases experiment tracking -> `weights-and-biases`
+
+## PRESENTATIONS / CAMPAIGN PRESENTATION WORK
+
+- PowerPoint artifact -> `powerpoint`
+- Campaign presentation workflow -> use a campaign-specific installed skill only if it is actually installed; otherwise `powerpoint`
+
+## HERMES MAINTENANCE / INTERNAL TESTING
+
+- Hermes Agent operation -> `hermes-agent`
+- Skill authoring -> `hermes-agent-skill-authoring`
+- Internal dogfood/testing workflow -> `dogfood` when explicitly appropriate
+
+# Examples
 
 User: "faz um vídeo dessa foto dançando"
-Route: VIDEO. Use image-to-video provider/tool. Do not load website/chart skills.
+Route: video provider/tool. No unrelated skill.
+
+User: "faz uma animação explicando órbita de satélite"
+Route: `manim-video`.
 
 User: "cria um gráfico de votação com esses números"
-Route: CHARTS/DATA. Use `jupyter-live-kernel` or the data plotting tool.
+Route: `jupyter-live-kernel`.
 
-User: "cria um site para meu sistema e deixa responsivo"
-Route: WEBSITE. Use `popular-web-designs` or `claude-design` + implementation skill if needed.
+User: "cria uma planilha com gráfico"
+Route: `xlsx`.
 
-User: "faz um mapa com esses 30 endereços"
-Route: MAPS. Use `interactive-maps`.
+User: "cria um site responsivo para esse sistema"
+Route: `popular-web-designs` + one implementation skill only if needed.
 
 User: "corrige esse erro do meu site"
-Route: SOFTWARE DEVELOPMENT. Start with `systematic-debugging`, adding web-design skills only if the task also includes visual redesign.
+Route: `systematic-debugging`.
 
-User: "edita essa foto e depois faz um vídeo dela"
-Route: IMAGE EDITING first, then VIDEO. This is a genuine two-stage task and may use two skills/providers sequentially.
+User: "analisa esse repositório e corrige o bug"
+Route: `codebase-inspection` then `systematic-debugging`.
 
-User: "cria uma planilha com os dados e gráficos"
-Route: DOCUMENTS/SPREADSHEET. Use `xlsx`; chart creation belongs inside the spreadsheet workflow.
+User: "faz um mapa com esses endereços"
+Route: `maps`.
 
----
+User: "edita esse PDF"
+Route: `pdf`.
+
+User: "extrai o texto desse documento escaneado"
+Route: `ocr-and-documents`.
+
+User: "gera uma música"
+Route: `audiocraft-audio-generation` or `songwriting-and-ai-music` depending on whether the request is generation or composition/writing.
+
+User: "mexer nas minhas luzes Hue"
+Route: `openhue`.
+
+User: "cria um PR no GitHub"
+Route: `github-pr-workflow`.
 
 # Conflict prevention
 
-When skills overlap:
-1. choose the narrower skill,
-2. prefer execution skills over style skills,
-3. do not let optional skills alter unrelated tasks,
-4. do not let a creative skill override factual identity, requested format, or technical constraints,
-5. do not silently substitute a different artifact type,
-6. do not load more than 3 skills unless the task truly has multiple independent stages.
+1. Choose the narrowest installed skill.
+2. Prefer execution capability over style guidance.
+3. Never reference a skill that is not installed.
+4. Do not load optional creative skills merely because they are available.
+5. Do not silently change artifact type.
+6. Do not silently change requested provider.
+7. Maximum 3 skills unless the user explicitly requests a multi-stage workflow.
 
 # User-visible behavior
 
 Route silently by default.
-The user should not need to know internal skill names.
-If the user asks which skill was selected, explain the route briefly.
+Only mention skill names if the user asks which skill was used or if the distinction materially affects the result.
