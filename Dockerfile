@@ -12,7 +12,7 @@ RUN base64 -d /tmp/custom-skills.tar.gz.b64 | tar -xz -C /opt/hermes/skills \
 
 # Always-loaded routing skill: chooses the smallest relevant installed skill set.
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router
-COPY hermes-nosso-router/SKILL.md /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/SKILL.md
+COPY hermes-nosso-router/SKILL.md /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/SKILL.md\nCOPY hermes-nosso-router/EXECUTORS.md /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/EXECUTORS.md
 
 # Lightweight S3 client for private Railway bucket backups.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 \
