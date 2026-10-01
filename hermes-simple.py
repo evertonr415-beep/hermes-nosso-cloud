@@ -368,15 +368,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
             route_meta=classify_route(text, route)
             if is_image_generation_request(text):
-                img=call_bridge_image(text)
+                try:
+                    img=call_bridge_image(text)
+                except urllib.error.HTTPError as e:
+                    raw=e.read(8192)
+                    detail=""
+                    try:
+                        payload=json.loads(raw or b"{}")
+                        detail=((payload.get("error") or {}).get("message") if isinstance(payload.get("error"),dict) else payload.get("error")) or ""
+                    except Exception:
+                        detail=""
+                    if e.code==429:
+                        msg="O gerador de imagem atingiu um limite temporário/quota do provider. Tente novamente em alguns minutos ou conecte outro provider de imagem."
+                    else:
+                        msg="O gerador de imagem respondeu com erro HTTP "+str(e.code)+(". "+detail[:180] if detail else "")
+                    return self.sendb(e.code,json.dumps({"error":msg,"providerStatus":e.code},ensure_ascii=False))
                 image_id=img.get("id")
                 if not image_id:
                     raise RuntimeError("Imagem gerada sem identificador")
+                used_model=img.get("model") or "gpt-image-2"
                 return self.sendb(200,json.dumps({
                     "text":"Imagem gerada.",
                     "via":"image",
                     "imageUrl":"/api/image/"+image_id,
-                    "routeMeta":{"category":"Imagem","skill":"image-generation","provider":"OpenAI · gpt-image-2"}
+                    "routeMeta":{"category":"Imagem","skill":"image-generation","provider":"OpenAI · "+used_model}
                 },ensure_ascii=False))
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="matrix":
