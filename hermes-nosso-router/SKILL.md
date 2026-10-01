@@ -21,6 +21,7 @@ Your job is to identify the user's requested outcome and load only the smallest 
 6. The user's explicit provider/tool choice wins when available.
 7. Artifact type outranks style. Example: "create an Excel dashboard" routes to `xlsx` first, not to a generic design skill.
 8. If no route fits, inspect installed skills with `skills_list` / `skill_view` and choose the narrowest match.
+9. Zero Cost Mode is the default for media: prefer local/free executors and never invoke a paid image/video/audio provider without explicit user authorization for that execution.
 
 ## Precedence
 
@@ -44,7 +45,7 @@ Examples:
 
 Use when user asks for video, animation, motion graphics, explainer video, Reels/Shorts production, or animated technical visuals.
 
-- General AI video generation or image-to-video -> use the available video-generation provider/tool directly. Do not substitute a static image.
+- General AI video generation or image-to-video -> use a verified free/local video executor first. If only a paid provider is available, do not invoke it automatically; stop and request explicit authorization. Do not substitute a static image when true generative motion was requested.
 - Mathematical/scientific/explainer animation -> `manim-video`
 - ASCII video -> `ascii-video`
 - YouTube production workflow -> `youtube-content`
@@ -57,7 +58,7 @@ Do not use `manim-video` for ordinary photorealistic image-to-video generation.
 
 Use when user asks to generate, edit, restore, retouch, cut out, mask, or transform images.
 
-- Ordinary image generation/editing -> use the available image provider/tool directly
+- Ordinary image generation/editing -> use a verified free/local image provider first; do not invoke a paid provider automatically
 - ComfyUI-specific workflow -> `comfyui`
 - Segmentation/masking/object isolation -> `segment-anything-model`
 - Infographic -> `baoyu-infographic`
