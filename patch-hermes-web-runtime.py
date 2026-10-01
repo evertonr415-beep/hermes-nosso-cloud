@@ -72,13 +72,23 @@ new_detail = '''        if not session:
 '''
 if old_detail in text:
     text = text.replace(old_detail, new_detail, 1)
-# Detail normalization is optional for compatibility with upstream refactors.
 
 # Serve generated images to the dashboard. Hermes tools emit MEDIA:/absolute/path,
 # but the dashboard PTY currently renders that token as plain text. Restrict this
 # endpoint to the two image cache roots used by our Railway image.
 media_marker = "def _hermes_nosso_media_file("
 if media_marker not in text:
+    # The injected media route uses pathlib.Path. Upstream sessions.py does not
+    # consistently import it across Hermes Agent releases, so make the patch
+    # self-contained and idempotent.
+    if "from pathlib import Path" not in text:
+        import_lines = text.splitlines()
+        insert_at = 0
+        if import_lines and import_lines[0].startswith("from __future__ import"):
+            insert_at = 1
+        import_lines.insert(insert_at, "from pathlib import Path")
+        text = "\n".join(import_lines) + ("\n" if text.endswith("\n") else "")
+
     import_anchor = "from fastapi.responses import StreamingResponse"
     if import_anchor in text:
         text = text.replace(
@@ -174,13 +184,10 @@ recovery.write_text(r'''(() => {
 
     localStorage.setItem(marker, "done");
   } catch (_) {
-    // Browser storage may be unavailable; never block the app.
   }
 })();
 ''', encoding="utf-8")
 
-# Browser-side MEDIA renderer. It observes the React/PTY transcript and replaces
-# literal image MEDIA tags with an inline image served by the restricted route above.
 media_js = web_dist / "hermes-media-renderer.js"
 media_js.write_text(r'''(() => {
   const VERSION = "20261001-1";
