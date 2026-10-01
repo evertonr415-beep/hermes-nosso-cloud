@@ -6,9 +6,11 @@ COPY hermes-simple.py /app/hermes-simple.py
 COPY patch-simple-media.py /tmp/patch-simple-media.py
 COPY patch-image-reliability.py /tmp/patch-image-reliability.py
 COPY patch-media-v2.py /tmp/patch-media-v2.py
+COPY patch-video-media.py /tmp/patch-video-media.py
 RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-image-reliability.py \
  && python /tmp/patch-media-v2.py \
- && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py
+ && python /tmp/patch-video-media.py \
+ && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
