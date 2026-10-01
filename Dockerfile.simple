@@ -10,6 +10,7 @@ COPY patch-video-media.py /tmp/patch-video-media.py
 COPY patch-hybrid-mode.py /tmp/patch-hybrid-mode.py
 COPY patch-attachment-ux.py /tmp/patch-attachment-ux.py
 COPY patch-multimodal-attachment.py /tmp/patch-multimodal-attachment.py
+COPY patch-owner-mode.py /tmp/patch-owner-mode.py
 RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-image-reliability.py \
  && python /tmp/patch-media-v2.py \
@@ -17,6 +18,7 @@ RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-hybrid-mode.py \
  && python /tmp/patch-attachment-ux.py \
  && python /tmp/patch-multimodal-attachment.py \
- && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py
+ && python /tmp/patch-owner-mode.py \
+ && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
