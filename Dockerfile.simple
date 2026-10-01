@@ -12,6 +12,7 @@ COPY patch-attachment-ux.py /tmp/patch-attachment-ux.py
 COPY patch-multimodal-attachment.py /tmp/patch-multimodal-attachment.py
 COPY patch-owner-mode.py /tmp/patch-owner-mode.py
 COPY patch-image-intent.py /tmp/patch-image-intent.py
+COPY patch-private-auth.py /tmp/patch-private-auth.py
 RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-image-reliability.py \
  && python /tmp/patch-media-v2.py \
@@ -21,6 +22,7 @@ RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-multimodal-attachment.py \
  && python /tmp/patch-owner-mode.py \
  && python /tmp/patch-image-intent.py \
- && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py
+ && python /tmp/patch-private-auth.py \
+ && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py /tmp/patch-private-auth.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
