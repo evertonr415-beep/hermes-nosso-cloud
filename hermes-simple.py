@@ -34,6 +34,10 @@ button,input,textarea,select{font:inherit}
 .history{overflow:auto;flex:1}
 .hist{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:#ddd;border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hist:hover,.hist.active{background:#2b2b2b;color:#fff}
+.histrow{display:flex;align-items:center;gap:4px}
+.histrow .hist{flex:1;min-width:0}
+.delchat{border:0;background:transparent;color:#777;cursor:pointer;border-radius:7px;padding:7px 8px;font-size:14px}
+.delchat:hover{background:#3a2323;color:#ffb4b4}
 .sidebottom{border-top:1px solid #333;padding-top:10px}
 .advanced{display:block;color:#aaa;text-decoration:none;padding:9px 10px;border-radius:8px;font-size:14px}
 .advanced:hover{background:#2b2b2b;color:#fff}
@@ -86,7 +90,7 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
       </select>
-      <div class="status" id="status">pronto</div>
+      <div class="status" id="status">pronto · estável</div>
     </header>
     <div class="chatwrap" id="chatwrap"><div class="chat" id="chat"></div></div>
     <div class="composerbar">
@@ -101,19 +105,35 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
 <script>
 const $=s=>document.querySelector(s);
 const chat=$('#chat'), input=$('#input'), send=$('#send'), historyEl=$('#history'), statusEl=$('#status');
-const key='hermes-simple-conversations-v1';
-let conversations=JSON.parse(localStorage.getItem(key)||'[]');
-let active=localStorage.getItem('hermes-simple-active')||'';
+const key='hermes-simple-conversations-v2';
+const activeKey='hermes-simple-active-v2';
+let conversations=[];
+try{
+  const raw=localStorage.getItem(key);
+  conversations=raw?JSON.parse(raw):[];
+  if(!Array.isArray(conversations))conversations=[];
+}catch(e){
+  conversations=[];
+  localStorage.removeItem(key);
+}
+let active=localStorage.getItem(activeKey)||'';
 function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(16).slice(2))}
-function save(){localStorage.setItem(key,JSON.stringify(conversations));localStorage.setItem('hermes-simple-active',active);renderHistory()}
+function save(){localStorage.setItem(key,JSON.stringify(conversations));localStorage.setItem(activeKey,active);renderHistory()}
 function current(){return conversations.find(c=>c.id===active)}
 function ensure(){
  if(!current()){const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save()}
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function renderHistory(){
- historyEl.innerHTML=conversations.map(c=>'<button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button>').join('');
- historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')})
+ historyEl.innerHTML=conversations.map(c=>'<div class="histrow"><button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button><button class="delchat" data-del="'+c.id+'" title="Excluir conversa">×</button></div>').join('');
+ historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')});
+ historyEl.querySelectorAll('.delchat').forEach(b=>b.onclick=e=>{
+   e.stopPropagation();
+   const id=b.dataset.del;
+   conversations=conversations.filter(c=>c.id!==id);
+   if(active===id)active=conversations[0]?.id||'';
+   save();render();
+ });
 }
 function render(){
  ensure(); const c=current();
@@ -135,7 +155,7 @@ async function submit(){
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
   c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
- finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
+ finally{send.disabled=false;statusEl.textContent='pronto · estável';save();render();input.focus()}
 }
 $('#newchat').onclick=()=>{const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save();render();input.focus();$('#sidebar').classList.remove('open')};
 send.onclick=submit;
