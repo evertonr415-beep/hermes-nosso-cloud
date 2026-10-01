@@ -16,8 +16,16 @@ COPY hermes-nosso-router/SKILL.md /opt/hermes/skills/autonomous-ai-agents/hermes
 COPY hermes-nosso-router/EXECUTORS.md /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/EXECUTORS.md
 COPY hermes-nosso-router/PROVIDERS.md /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/PROVIDERS.md
 
+# Hermes Nosso full-stack builder: creates and validates real sites/systems/apps.
+RUN mkdir -p /opt/hermes/skills/software-development/hermes-fullstack-builder
+COPY hermes-fullstack-builder/SKILL.md /opt/hermes/skills/software-development/hermes-fullstack-builder/SKILL.md
+COPY patch-router-fullstack.py /tmp/patch-router-fullstack.py
+RUN python3 /tmp/patch-router-fullstack.py \
+    && rm -f /tmp/patch-router-fullstack.py
+
 # Lightweight S3 client for private Railway bucket backups.
-RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 \
+# git/curl/jq are explicit full-stack execution dependencies; node/npm are provided by the Hermes image.
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Make the Hermes CLI available from every runtime shell/exec context.
