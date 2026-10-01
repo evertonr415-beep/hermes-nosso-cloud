@@ -1,4 +1,4 @@
-import base64, hmac, json, os, time, threading, urllib.request, urllib.error, re, uuid
+import base64, hmac, json, os, time, threading, urllib.request, urllib.error, re, uuid, tempfile, subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -65,6 +65,10 @@ button,input,textarea,select{font:inherit}
 .routebadge.provider{background:#eef5ff;border-color:#d7e5fb;color:#34506f}
 .routebadge.skill{background:#f5f0ff;border-color:#e4d8fb;color:#5b3d86}
 .generated-image{display:block;max-width:min(100%,720px);height:auto;border-radius:14px;border:1px solid var(--line);margin-top:10px;box-shadow:var(--shadow);cursor:pointer}
+.generated-video{display:block;max-width:min(100%,720px);width:100%;border-radius:14px;border:1px solid var(--line);margin-top:10px;box-shadow:var(--shadow);background:#000}
+.attach{width:38px;height:38px;border:0;border-radius:12px;background:#f1f1ef;color:#333;cursor:pointer;font-size:18px}
+.attachstate{max-width:820px;margin:6px auto 0;font-size:12px;color:#4b5563}
+.zerocost{font-size:11px;border:1px solid #cfe8d5;background:#eefbf1;color:#276738;border-radius:999px;padding:5px 8px}
 .inline-link{color:#2563eb;text-decoration:underline;word-break:break-all}
 .composerbar{position:fixed;left:260px;right:0;bottom:0;padding:18px 22px 24px;background:linear-gradient(transparent,var(--bg) 32%)}
 .composer{max-width:820px;margin:0 auto;background:#fff;border:1px solid #dadad6;border-radius:18px;box-shadow:var(--shadow);padding:9px 10px 9px 14px;display:flex;align-items:flex-end;gap:8px}
@@ -95,21 +99,25 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
       </select>
-      <div class="status" id="status">pronto · estável</div>
+      <span class="zerocost">Zero Cost Mode</span><div class="status" id="status">pronto · estável</div>
     </header>
     <div class="chatwrap" id="chatwrap"><div class="chat" id="chat"></div></div>
     <div class="composerbar">
       <div class="composer">
+        <input id="fileinput" type="file" accept="image/*" hidden>
+        <button class="attach" id="attach" type="button" aria-label="Anexar imagem">＋</button>
         <textarea id="input" rows="1" placeholder="Pergunte alguma coisa ao Hermes..."></textarea>
         <button class="send" id="send" aria-label="Enviar">↑</button>
       </div>
-      <div class="note">Hermes pode usar ferramentas, memória e skills em segundo plano.</div>
+      <div class="attachstate" id="attachstate"></div>
+      <div class="note">Zero Cost Mode: vídeo com imagem anexada é gerado localmente. Provider pago não é usado nesse caminho.</div>
     </div>
   </main>
 </div>
 <script>
 const $=s=>document.querySelector(s);
-const chat=$('#chat'), input=$('#input'), send=$('#send'), historyEl=$('#history'), statusEl=$('#status');
+const chat=$('#chat'), input=$('#input'), send=$('#send'), historyEl=$('#history'), statusEl=$('#status'), fileInput=$('#fileinput'), attachBtn=$('#attach'), attachState=$('#attachstate');
+let pendingAttachment=null;
 const key='hermes-simple-conversations-v2';
 const activeKey='hermes-simple-active-v2';
 let conversations=[];
@@ -154,28 +162,45 @@ function render(){
  chat.innerHTML=c.messages.map(m=>{
    const role=m.role==='assistant'?'<div class="role">Hermes</div>':'';
    const body=m.error?'<div class="err">'+esc(m.text)+'</div>':linkifyText(m.text);
-   let image='';
+   let media='';
    const u=m.imageUrl || ((m.role==='assistant' && m.routeMeta && m.routeMeta.category==='Imagem')?firstUrl(m.text):null);
-   if(u) image='<img class="generated-image" src="'+esc(u)+'" alt="Imagem gerada pelo Hermes" onclick="window.open(this.src, \'_blank\')" onerror="this.style.display=\'none\'"/>';
-   return '<div class="msg '+m.role+'"><div class="bubble">'+role+body+image+'</div></div>';
+   if(u) media+='<img class="generated-image" src="'+esc(u)+'" alt="Imagem" onclick="window.open(this.src, \'_blank\')" onerror="this.style.display=\'none\'"/>';
+   if(m.videoUrl) media+='<video class="generated-video" src="'+esc(m.videoUrl)+'" controls playsinline preload="metadata"></video>';
+   if(m.attachmentUrl) media+='<img class="generated-image" src="'+esc(m.attachmentUrl)+'" alt="Imagem anexada"/>';
+   return '<div class="msg '+m.role+'"><div class="bubble">'+role+body+media+'</div></div>';
  }).join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
+attachBtn.onclick=()=>fileInput.click();
+fileInput.onchange=async()=>{
+ const file=fileInput.files&&fileInput.files[0]; if(!file)return;
+ if(!file.type.startsWith('image/')){attachState.textContent='Envie uma imagem.';return}
+ if(file.size>12*1024*1024){attachState.textContent='Imagem muito grande (máx. 12 MB).';return}
+ attachState.textContent='Enviando imagem…';
+ try{
+   const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)});
+   const res=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:file.name,mime:file.type,data})});
+   const j=await res.json().catch(()=>({}));
+   if(!res.ok)throw new Error(j.error||'Falha no upload');
+   pendingAttachment={id:j.id,url:j.url,name:file.name};
+   attachState.textContent='📎 '+file.name+' · pronto';
+ }catch(e){pendingAttachment=null;attachState.textContent=e.message||'Falha no upload'}
+};
 async function submit(){
  const text=input.value.trim(); if(!text||send.disabled)return;
- ensure(); const c=current(); c.messages.push({role:'user',text});
+ ensure(); const c=current(); c.messages.push({role:'user',text,attachmentUrl:pendingAttachment?pendingAttachment.url:null});
  if(c.title==='Nova conversa')c.title=titleFrom(text);
  input.value=''; input.style.height='auto'; send.disabled=true; statusEl.textContent='pensando…'; save(); render();
  const holder=document.createElement('div');holder.className='msg assistant';holder.innerHTML='<div class="bubble"><div class="role">Hermes</div><div class="typing"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div></div>';chat.appendChild(holder);$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight;
  try{
-  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,route:$('#model').value})});
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,route:$('#model').value,attachmentId:pendingAttachment?pendingAttachment.id:null})});
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null,imageUrl:data.imageUrl||null});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null,imageUrl:data.imageUrl||null,videoUrl:data.videoUrl||null});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
- finally{send.disabled=false;statusEl.textContent='pronto · estável';save();render();input.focus()}
+ finally{pendingAttachment=null;fileInput.value='';attachState.textContent='';send.disabled=false;statusEl.textContent='pronto · estável';save();render();input.focus()}
 }
 $('#newchat').onclick=()=>{const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save();render();input.focus();$('#sidebar').classList.remove('open')};
 send.onclick=submit;
@@ -271,7 +296,7 @@ def classify_route(text, route="auto"):
         if has("matem", "equação", "algorit", "explicativo", "explicação técnica", "3blue1brown"):
             skill, provider = "manim-video", "Manim"
         else:
-            skill, provider = "video-generation", "Runway/externo"
+            skill, provider = "video-local", "Local · custo zero"
     elif has("imagem", "foto", "foto ", "editar foto", "remover fundo", "recortar", "upscale"):
         category, skill, provider = "Imagem", "image-editing", "Gerador de imagem"
     elif has("gráfico", "grafico", "dashboard", "estatística", "estatistica", "plot"):
@@ -339,6 +364,38 @@ def cache_image_from_text(text):
             print(f"[hermes-simple] inline image fetch skipped type={type(e).__name__}",flush=True)
     return None
 
+def store_media(raw, mime):
+    mid=uuid.uuid4().hex
+    now=time.time()
+    with MEDIA_LOCK:
+        for key,val in list(MEDIA_STORE.items()):
+            if now-val["created"]>MEDIA_TTL:
+                MEDIA_STORE.pop(key,None)
+        MEDIA_STORE[mid]={"bytes":raw,"mime":mime,"created":now}
+    return mid
+
+def is_video_request(text):
+    t=(text or "").lower()
+    return any(x in t for x in ("vídeo","video","animar","animação","animacao","reels","transforme em vídeo","transforme em video"))
+
+def generate_local_video(image_bytes, mime):
+    suffix=".png"
+    if "jpeg" in mime or "jpg" in mime: suffix=".jpg"
+    elif "webp" in mime: suffix=".webp"
+    with tempfile.TemporaryDirectory() as td:
+        src=os.path.join(td,"input"+suffix)
+        out=os.path.join(td,"output.mp4")
+        with open(src,"wb") as fh: fh.write(image_bytes)
+        vf=("scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,"
+            "zoompan=z='min(zoom+0.0008,1.10)':d=150:s=1080x1920:fps=30,"
+            "format=yuv420p")
+        cmd=["ffmpeg","-y","-loop","1","-i",src,"-vf",vf,"-t","5","-c:v","libx264","-preset","veryfast","-crf","23","-movflags","+faststart",out]
+        p=subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=90)
+        if p.returncode!=0: raise RuntimeError("ffmpeg_failed")
+        with open(out,"rb") as fh: raw=fh.read()
+    return store_media(raw,"video/mp4")
+
 def response_text(data):
     parts=[]
     for item in data.get("output",[]) or []:
@@ -388,16 +445,37 @@ class Handler(BaseHTTPRequestHandler):
         return self.sendb(404,'{"error":"not_found"}')
     def do_POST(self):
         if not self.require_auth(): return
-        if self.path!="/api/chat":
+        if self.path not in ("/api/chat","/api/upload"):
             return self.sendb(404,'{"error":"not_found"}')
         try:
             n=int(self.headers.get("Content-Length","0"))
+            if n>18*1024*1024:
+                return self.sendb(413,'{"error":"Arquivo muito grande"}')
             msg=json.loads(self.rfile.read(n) or b"{}")
+            if self.path=="/api/upload":
+                data=(msg.get("data") or "")
+                mime=(msg.get("mime") or "image/png").lower()
+                if not mime.startswith("image/") or "," not in data:
+                    return self.sendb(400,'{"error":"Imagem inválida"}')
+                raw=base64.b64decode(data.split(",",1)[1],validate=False)
+                if len(raw)>12*1024*1024:
+                    return self.sendb(413,'{"error":"Imagem muito grande"}')
+                mid=store_media(raw,mime)
+                return self.sendb(200,json.dumps({"id":mid,"url":"/api/media/"+mid},ensure_ascii=False))
             text=(msg.get("input") or "").strip()
             conv=(msg.get("conversation") or "").strip()
             route=(msg.get("route") or "auto").strip()
+            attachment_id=(msg.get("attachmentId") or "").strip()
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
+            if attachment_id and is_video_request(text):
+                with MEDIA_LOCK:
+                    item=MEDIA_STORE.get(attachment_id)
+                if not item or not str(item.get("mime","")).startswith("image/"):
+                    return self.sendb(400,json.dumps({"error":"A imagem anexada não está mais disponível. Anexe novamente."},ensure_ascii=False))
+                vid=generate_local_video(item["bytes"],item["mime"])
+                meta={"category":"Vídeo","skill":"video-local","provider":"Local · custo zero"}
+                return self.sendb(200,json.dumps({"text":"Vídeo criado localmente em 5 segundos, sem usar provider pago.","via":"local-ffmpeg","routeMeta":meta,"videoUrl":"/api/media/"+vid},ensure_ascii=False))
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="matrix":
                 payload.update({"provider":"matrix","model":"claude-opus-5"})
