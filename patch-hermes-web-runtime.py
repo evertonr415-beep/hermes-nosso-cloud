@@ -74,6 +74,84 @@ if old_detail in text:
     text = text.replace(old_detail, new_detail, 1)
 # Detail normalization is optional for compatibility with upstream refactors.
 
+# Serve generated images to the dashboard. Hermes tools emit MEDIA:/absolute/path,
+# but the dashboard PTY currently renders that token as plain text. Restrict this
+# endpoint to the two image cache roots used by our Railway image.
+media_marker = "def _hermes_nosso_media_file("
+if media_marker not in text:
+    import_anchor = "from fastapi.responses import StreamingResponse"
+    if import_anchor in text:
+        text = text.replace(
+            import_anchor,
+            import_anchor + ", FileResponse",
+            1,
+        )
+    elif "from fastapi.responses import FileResponse" not in text:
+        raise SystemExit("sessions patch: fastapi.responses import marker not found")
+
+    route_anchor = '_NOT_FOUND = "Session not found"\n'
+    media_route = r'''
+
+_HERMES_NOSSO_MEDIA_ROOTS = (
+    Path("/opt/data/cache/images"),
+    Path("/opt/data/image_cache"),
+)
+
+
+def _hermes_nosso_media_file(path: str):
+    """Return one generated image while preventing arbitrary filesystem reads."""
+    try:
+        requested = Path(path)
+        if not requested.is_absolute():
+            raise ValueError("absolute path required")
+        resolved = requested.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=404, detail="Generated image not found")
+
+    allowed = False
+    for root in _HERMES_NOSSO_MEDIA_ROOTS:
+        try:
+            root_resolved = root.resolve(strict=False)
+            if resolved == root_resolved or root_resolved in resolved.parents:
+                allowed = True
+                break
+        except (OSError, RuntimeError):
+            continue
+
+    if not allowed or not resolved.is_file():
+        raise HTTPException(status_code=404, detail="Generated image not found")
+
+    suffix = resolved.suffix.lower()
+    media_types = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".gif": "image/gif",
+        ".svg": "image/svg+xml",
+        ".avif": "image/avif",
+    }
+    media_type = media_types.get(suffix)
+    if media_type is None:
+        raise HTTPException(status_code=415, detail="Unsupported generated image type")
+
+    return FileResponse(
+        str(resolved),
+        media_type=media_type,
+        filename=resolved.name,
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
+@manage_router.get("/api/hermes-nosso/media")
+def hermes_nosso_media(path: str = Query(..., min_length=1)):
+    return _hermes_nosso_media_file(path)
+'''
+    if route_anchor not in text:
+        raise SystemExit("sessions patch: route insertion marker not found")
+    text = text.replace(route_anchor, route_anchor + media_route + "\n", 1)
+
 sessions.write_text(text, encoding="utf-8")
 
 web_dist = Path("/opt/hermes/hermes_cli/web_dist")
@@ -101,9 +179,110 @@ recovery.write_text(r'''(() => {
 })();
 ''', encoding="utf-8")
 
+# Browser-side MEDIA renderer. It observes the React/PTY transcript and replaces
+# literal image MEDIA tags with an inline image served by the restricted route above.
+media_js = web_dist / "hermes-media-renderer.js"
+media_js.write_text(r'''(() => {
+  const VERSION = "20261001-1";
+  const MEDIA_RE = /MEDIA:((?:\/opt\/data\/(?:cache\/images|image_cache)\/)[^\n\r\"'<>]+?\.(?:png|jpe?g|webp|gif|svg|avif))/ig;
+
+  function makeImage(path) {
+    const wrap = document.createElement("span");
+    wrap.className = "hermes-nosso-media";
+    wrap.dataset.hermesNossoMedia = VERSION;
+    wrap.style.display = "block";
+    wrap.style.margin = "10px 0";
+
+    const img = document.createElement("img");
+    img.src = "/api/hermes-nosso/media?path=" + encodeURIComponent(path);
+    img.alt = "Imagem gerada pelo Hermes";
+    img.loading = "lazy";
+    img.style.display = "block";
+    img.style.maxWidth = "min(100%, 1024px)";
+    img.style.maxHeight = "75vh";
+    img.style.objectFit = "contain";
+    img.style.borderRadius = "12px";
+    img.style.boxShadow = "0 1px 3px rgba(0,0,0,.18)";
+
+    const fallback = document.createElement("a");
+    fallback.href = img.src;
+    fallback.target = "_blank";
+    fallback.rel = "noopener noreferrer";
+    fallback.textContent = "Abrir imagem gerada";
+    fallback.style.display = "none";
+    fallback.style.fontSize = "13px";
+
+    img.addEventListener("error", () => {
+      img.style.display = "none";
+      fallback.style.display = "inline";
+    });
+
+    wrap.appendChild(img);
+    wrap.appendChild(fallback);
+    return wrap;
+  }
+
+  function renderTextNode(node) {
+    if (!node || !node.parentElement) return;
+    if (node.parentElement.closest("script,style,textarea,input,[data-hermes-nosso-media]")) return;
+    const value = node.nodeValue || "";
+    if (!value.includes("MEDIA:")) return;
+
+    MEDIA_RE.lastIndex = 0;
+    let match;
+    let last = 0;
+    let changed = false;
+    const frag = document.createDocumentFragment();
+
+    while ((match = MEDIA_RE.exec(value)) !== null) {
+      changed = true;
+      if (match.index > last) frag.appendChild(document.createTextNode(value.slice(last, match.index)));
+      frag.appendChild(makeImage(match[1].trim()));
+      last = MEDIA_RE.lastIndex;
+    }
+    if (!changed) return;
+    if (last < value.length) frag.appendChild(document.createTextNode(value.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+
+  function scan(root) {
+    if (!root) return;
+    if (root.nodeType === Node.TEXT_NODE) {
+      renderTextNode(root);
+      return;
+    }
+    if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let current;
+    while ((current = walker.nextNode())) nodes.push(current);
+    for (const node of nodes) renderTextNode(node);
+  }
+
+  function start() {
+    scan(document.body);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) scan(node);
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+})();
+''', encoding="utf-8")
+
 index = web_dist / "index.html"
 html = index.read_text(encoding="utf-8")
-tag = '<script src="/hermes-ui-recovery.js?v=20260929-3"></script>'
-if tag not in html:
-    html = html.replace("</head>", f"    {tag}\n  </head>")
+recovery_tag = '<script src="/hermes-ui-recovery.js?v=20260929-3"></script>'
+if recovery_tag not in html:
+    html = html.replace("</head>", f"    {recovery_tag}\n  </head>")
+media_tag = '<script src="/hermes-media-renderer.js?v=20261001-1"></script>'
+if media_tag not in html:
+    html = html.replace("</head>", f"    {media_tag}\n  </head>")
 index.write_text(html, encoding="utf-8")
