@@ -1,6 +1,8 @@
 FROM python:3.12-alpine
 WORKDIR /app
 COPY bridge.py /app/bridge.py
+COPY patch-bridge-paid.py /tmp/patch-bridge-paid.py
+RUN python /tmp/patch-bridge-paid.py && rm -f /tmp/patch-bridge-paid.py
 ENV BRIDGE_PORT=9120
 EXPOSE 9120
 CMD ["python","/app/bridge.py"]
