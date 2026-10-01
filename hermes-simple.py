@@ -379,10 +379,14 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception:
                         detail=""
                     if e.code==429:
-                        msg="O gerador de imagem atingiu um limite temporário/quota do provider. Tente novamente em alguns minutos ou conecte outro provider de imagem."
+                        msg="O gerador de imagem está indisponível no momento porque o provider atingiu limite/quota. A sua mensagem foi recebida normalmente; o problema está somente na geração da imagem."
                     else:
                         msg="O gerador de imagem respondeu com erro HTTP "+str(e.code)+(". "+detail[:180] if detail else "")
-                    return self.sendb(e.code,json.dumps({"error":msg,"providerStatus":e.code},ensure_ascii=False))
+                    return self.sendb(200,json.dumps({
+                        "text":msg,
+                        "via":"image-error",
+                        "routeMeta":{"category":"Imagem","skill":"image-generation","provider":"Provider indisponível"}
+                    },ensure_ascii=False))
                 image_id=img.get("id")
                 if not image_id:
                     raise RuntimeError("Imagem gerada sem identificador")
