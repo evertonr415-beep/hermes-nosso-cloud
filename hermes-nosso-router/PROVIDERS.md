@@ -103,3 +103,23 @@ At task time:
 The host environment has authenticated integrations available for Runway, Vercel and Supabase.
 This does not automatically grant those credentials to the Hermes Cloud container.
 Hermes Cloud should treat them as EXTERNAL unless the host exposes the integration during that request or runtime credentials are later provisioned.
+
+
+## Zero Cost Mode
+
+Hermes Nosso defaults to zero-cost execution for creative/media tasks.
+
+Rules:
+- Never invoke a paid media provider automatically.
+- Local/free execution has priority over every paid provider.
+- If a free cloud provider is configured and callable, it may be used before local fallback when it improves quality.
+- Paid providers such as Runway or paid image/video APIs require explicit user authorization for that specific execution.
+- When no free execution path exists, return a concise unavailable/waiting-for-free-capacity message instead of silently charging.
+- Do not interpret the mere presence of an API key as permission to spend.
+- Preserve the existing working text-chat path until a verified free text provider is available; do not break chat merely to satisfy zero-cost preference.
+
+Priority for media:
+1. local zero-cost executor;
+2. configured free-cloud executor;
+3. stop and report unavailable;
+4. paid executor only after explicit user authorization.
