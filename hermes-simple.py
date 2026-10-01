@@ -138,7 +138,7 @@ function renderHistory(){
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>'+routeHtml(m):'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
