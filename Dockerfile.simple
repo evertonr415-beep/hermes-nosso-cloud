@@ -21,6 +21,7 @@ COPY fix-private-auth-patch.py /tmp/fix-private-auth-patch.py
 COPY patch-owner-cross-device-login.py /tmp/patch-owner-cross-device-login.py
 COPY patch-persistent-media.py /tmp/patch-persistent-media.py
 COPY patch-recover-lost-images.py /tmp/patch-recover-lost-images.py
+COPY patch-cross-device-consistency.py /tmp/patch-cross-device-consistency.py
 RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-image-reliability.py \
  && python /tmp/patch-media-v2.py \
@@ -39,6 +40,7 @@ RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-owner-cross-device-login.py \
  && python /tmp/patch-persistent-media.py \
  && python /tmp/patch-recover-lost-images.py \
- && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py /tmp/patch-real-person-reference.py /tmp/patch-reference-search-fallback.py /tmp/patch-real-person-resilience.py /tmp/patch-real-people-grounded-skill.py /tmp/patch-private-auth.py /tmp/fix-private-auth-patch.py /tmp/patch-owner-cross-device-login.py /tmp/patch-persistent-media.py /tmp/patch-recover-lost-images.py
+ && python /tmp/patch-cross-device-consistency.py \
+ && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py /tmp/patch-real-person-reference.py /tmp/patch-reference-search-fallback.py /tmp/patch-real-person-resilience.py /tmp/patch-real-people-grounded-skill.py /tmp/patch-private-auth.py /tmp/fix-private-auth-patch.py /tmp/patch-owner-cross-device-login.py /tmp/patch-persistent-media.py /tmp/patch-recover-lost-images.py /tmp/patch-cross-device-consistency.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
