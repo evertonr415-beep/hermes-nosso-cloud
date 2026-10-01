@@ -17,29 +17,49 @@ POST_PATHS={"/v1/chat/completions","/v1/responses","/v1/runs"}
 def generate_image(prompt, model="gpt-image-2", size="1024x1024"):
     if not OPENAI_KEY:
         raise RuntimeError("OPENAI_API_KEY missing")
-    print(f"[image] generation start model={model} size={size}",flush=True)
-    payload=json.dumps({"model":model,"prompt":prompt,"size":size}).encode()
-    req=urllib.request.Request(
-        "https://api.openai.com/v1/images/generations",
-        data=payload,
-        method="POST",
-        headers={"Authorization":"Bearer "+OPENAI_KEY,"Content-Type":"application/json","Accept":"application/json"}
-    )
-    with urllib.request.urlopen(req,timeout=75) as res:
-        data=json.load(res)
-    item=(data.get("data") or [{}])[0]
-    b64=item.get("b64_json")
-    if not b64:
-        raise RuntimeError("image response missing b64_json")
-    raw=base64.b64decode(b64)
-    iid=uuid.uuid4().hex
-    now=time.time()
-    with IMAGE_LOCK:
-        for key,val in list(IMAGE_STORE.items()):
-            if now-val["created"] > IMAGE_TTL:
-                IMAGE_STORE.pop(key,None)
-        IMAGE_STORE[iid]={"bytes":raw,"mime":"image/png","created":now}
-    return iid, model
+
+    candidates=[]
+    for name in (model, "gpt-image-2.5-flare", "gpt-image-2.5-sunburst"):
+        if name and name not in candidates:
+            candidates.append(name)
+
+    last_http_error=None
+    for candidate in candidates:
+        print(f"[image] generation start model={candidate} size={size}",flush=True)
+        payload=json.dumps({"model":candidate,"prompt":prompt,"size":size}).encode()
+        req=urllib.request.Request(
+            "https://api.openai.com/v1/images/generations",
+            data=payload,
+            method="POST",
+            headers={"Authorization":"Bearer "+OPENAI_KEY,"Content-Type":"application/json","Accept":"application/json"}
+        )
+        try:
+            with urllib.request.urlopen(req,timeout=75) as res:
+                data=json.load(res)
+            item=(data.get("data") or [{}])[0]
+            b64=item.get("b64_json")
+            if not b64:
+                raise RuntimeError("image response missing b64_json")
+            raw=base64.b64decode(b64)
+            iid=uuid.uuid4().hex
+            now=time.time()
+            with IMAGE_LOCK:
+                for key,val in list(IMAGE_STORE.items()):
+                    if now-val["created"] > IMAGE_TTL:
+                        IMAGE_STORE.pop(key,None)
+                IMAGE_STORE[iid]={"bytes":raw,"mime":"image/png","created":now}
+            print(f"[image] generation success model={candidate}",flush=True)
+            return iid, candidate
+        except urllib.error.HTTPError as exc:
+            last_http_error=exc
+            print(f"[image] generation http={exc.code} model={candidate}",flush=True)
+            if exc.code==429:
+                continue
+            raise
+
+    if last_http_error:
+        raise last_http_error
+    raise RuntimeError("image generation unavailable")
 
 def hermes_chat(prompt):
     payload=json.dumps({"model":"gpt-5.6-sol","messages":[{"role":"user","content":prompt}],"stream":False}).encode()
