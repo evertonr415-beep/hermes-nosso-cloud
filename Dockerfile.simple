@@ -1,6 +1,7 @@
 FROM python:3.12-alpine
 WORKDIR /app
 RUN apk add --no-cache ffmpeg
+RUN pip install --no-cache-dir gradio_client==2.0.3
 COPY hermes-simple.py /app/hermes-simple.py
 COPY patch-simple-media.py /tmp/patch-simple-media.py
 RUN python /tmp/patch-simple-media.py && rm -f /tmp/patch-simple-media.py
