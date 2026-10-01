@@ -1,4 +1,4 @@
-import base64, hmac, json, os, time, threading, urllib.request, urllib.error
+import base64, hmac, json, os, time, threading, urllib.request, urllib.error, re, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -10,6 +10,9 @@ DIRECT_KEY = os.getenv("API_SERVER_KEY", "")
 BRIDGE_UPSTREAM = os.getenv("HERMES_SIMPLE_BRIDGE_UPSTREAM", "http://hermes-chatgpt-bridge-v2.railway.internal:9120").rstrip("/")
 BRIDGE_KEY = os.getenv("HERMES_BRIDGE_KEY", "")
 ADVANCED_URL = os.getenv("HERMES_ADVANCED_URL", "https://hermes-cloud-production-13fb.up.railway.app")
+MEDIA_STORE={}
+MEDIA_LOCK=threading.Lock()
+MEDIA_TTL=60*60
 
 HTML = r'''<!doctype html>
 <html lang="pt-BR">
@@ -152,10 +155,8 @@ function render(){
    const role=m.role==='assistant'?'<div class="role">Hermes</div>':'';
    const body=m.error?'<div class="err">'+esc(m.text)+'</div>':linkifyText(m.text);
    let image='';
-   if(m.role==='assistant' && m.routeMeta && m.routeMeta.category==='Imagem'){
-     const u=firstUrl(m.text);
-     if(u) image='<img class="generated-image" src="'+esc(u)+'" alt="Imagem gerada pelo Hermes" onclick="window.open(this.src, \'_blank\')" onerror="this.style.display=\'none\'"/>';
-   }
+   const u=m.imageUrl || ((m.role==='assistant' && m.routeMeta && m.routeMeta.category==='Imagem')?firstUrl(m.text):null);
+   if(u) image='<img class="generated-image" src="'+esc(u)+'" alt="Imagem gerada pelo Hermes" onclick="window.open(this.src, \'_blank\')" onerror="this.style.display=\'none\'"/>';
    return '<div class="msg '+m.role+'"><div class="bubble">'+role+body+image+'</div></div>';
  }).join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
@@ -172,7 +173,7 @@ async function submit(){
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null,imageUrl:data.imageUrl||null});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto · estável';save();render();input.focus()}
 }
@@ -309,6 +310,35 @@ def classify_route(text, route="auto"):
 
     return {"category": category, "skill": skill, "provider": provider}
 
+def cache_image_from_text(text):
+    urls=re.findall(r'https?://[^\s<>"\']+', text or "")
+    for raw_url in urls[:3]:
+        url=raw_url.rstrip(").,;]")
+        try:
+            req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"image/*,*/*;q=0.8"})
+            with urllib.request.urlopen(req,timeout=12) as res:
+                ctype=(res.headers.get("Content-Type","") or "").split(";",1)[0].strip().lower()
+                if not ctype.startswith("image/"):
+                    continue
+                length=res.headers.get("Content-Length")
+                if length and int(length)>15*1024*1024:
+                    continue
+                raw=res.read(15*1024*1024+1)
+                if len(raw)>15*1024*1024:
+                    continue
+            mid=uuid.uuid4().hex
+            now=time.time()
+            with MEDIA_LOCK:
+                for key,val in list(MEDIA_STORE.items()):
+                    if now-val["created"]>MEDIA_TTL:
+                        MEDIA_STORE.pop(key,None)
+                MEDIA_STORE[mid]={"bytes":raw,"mime":ctype or "image/png","created":now}
+            print(f"[hermes-simple] cached inline image bytes={len(raw)}",flush=True)
+            return mid
+        except Exception as e:
+            print(f"[hermes-simple] inline image fetch skipped type={type(e).__name__}",flush=True)
+    return None
+
 def response_text(data):
     parts=[]
     for item in data.get("output",[]) or []:
@@ -345,6 +375,14 @@ class Handler(BaseHTTPRequestHandler):
         if self.path=="/health":
             return self.sendb(200,'{"status":"ok"}')
         if not self.require_auth(): return
+        path=self.path.split("?",1)[0]
+        if path.startswith("/api/media/"):
+            mid=path.rsplit("/",1)[-1]
+            with MEDIA_LOCK:
+                item=MEDIA_STORE.get(mid)
+            if not item:
+                return self.sendb(404,'{"error":"media_not_found"}')
+            return self.sendb(200,item["bytes"],item["mime"])
         if self.path.split("?",1)[0] in ("/","/index.html","/chat"):
             return self.sendb(200,HTML,"text/html; charset=utf-8")
         return self.sendb(404,'{"error":"not_found"}')
@@ -369,7 +407,13 @@ class Handler(BaseHTTPRequestHandler):
             out=response_text(data)
             if not out:
                 out="O Hermes concluiu a execução, mas não retornou texto."
-            return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":classify_route(text, route)},ensure_ascii=False))
+            route_meta=classify_route(text, route)
+            image_url=None
+            if route_meta.get("category")=="Imagem":
+                mid=cache_image_from_text(out)
+                if mid:
+                    image_url="/api/media/"+mid
+            return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":route_meta,"imageUrl":image_url},ensure_ascii=False))
         except Exception as e:
             print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:500],flush=True)
             return self.sendb(502,json.dumps({"error":"Não consegui falar com o Hermes agora. Tente novamente.","type":type(e).__name__},ensure_ascii=False))
