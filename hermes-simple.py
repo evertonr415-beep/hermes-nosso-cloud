@@ -57,7 +57,6 @@ button,input,textarea,select{font:inherit}
 .routebadge{font-size:11px;line-height:1;border:1px solid #deded8;background:#f6f6f3;color:#555b63;border-radius:999px;padding:5px 7px}
 .routebadge.provider{background:#eef5ff;border-color:#d7e5fb;color:#34506f}
 .routebadge.skill{background:#f5f0ff;border-color:#e4d8fb;color:#5b3d86}
-.generated-image{display:block;max-width:min(100%,720px);height:auto;border-radius:14px;border:1px solid var(--line);margin-top:10px;box-shadow:var(--shadow)}
 .composerbar{position:fixed;left:260px;right:0;bottom:0;padding:18px 22px 24px;background:linear-gradient(transparent,var(--bg) 32%)}
 .composer{max-width:820px;margin:0 auto;background:#fff;border:1px solid #dadad6;border-radius:18px;box-shadow:var(--shadow);padding:9px 10px 9px 14px;display:flex;align-items:flex-end;gap:8px}
 textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180px;padding:8px 2px;background:transparent;line-height:1.45}
@@ -119,7 +118,7 @@ function renderHistory(){
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>'+routeHtml(m):'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+(m.imageUrl?'<img class="generated-image" src="'+esc(m.imageUrl)+'" alt="Imagem gerada pelo Hermes"/>':'')+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>'+routeHtml(m):'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
@@ -130,19 +129,12 @@ async function submit(){
  input.value=''; input.style.height='auto'; send.disabled=true; statusEl.textContent='pensando…'; save(); render();
  const holder=document.createElement('div');holder.className='msg assistant';holder.innerHTML='<div class="bubble"><div class="role">Hermes</div><div class="typing"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div></div>';chat.appendChild(holder);$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight;
  try{
-  const controller=new AbortController();
-  const timeoutId=setTimeout(()=>controller.abort(),95000);
-  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,route:$('#model').value}),signal:controller.signal});
-  clearTimeout(timeoutId);
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,route:$('#model').value})});
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null,imageUrl:data.imageUrl||null});
- }catch(e){
-  holder.remove();
-  const msg=(e&&e.name==='AbortError')?'A geração demorou demais e foi cancelada. Você já pode tentar novamente.':(e.message||'Erro de conexão');
-  c.messages.push({role:'assistant',text:msg,error:true})
-}
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',routeMeta:data.routeMeta||null});
+ }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
 }
 $('#newchat').onclick=()=>{const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save();render();input.focus();$('#sidebar').classList.remove('open')};
@@ -166,33 +158,6 @@ def auth_ok(headers):
         return hmac.compare_digest(u, USER) and hmac.compare_digest(p, PASSWORD)
     except Exception:
         return False
-
-
-def is_image_generation_request(text):
-    t=(text or "").lower()
-    wants=any(x in t for x in ("gere uma imagem","gerar uma imagem","crie uma imagem","criar uma imagem","faça uma imagem","faca uma imagem","desenhe","ilustre"))
-    editing=any(x in t for x in ("edite","editar","altere","alterar","modifique","modificar","nessa foto","nesta foto","essa imagem","esta imagem","remova da foto","troque o rosto"))
-    return wants and not editing
-
-def call_bridge_image(prompt):
-    if not BRIDGE_KEY:
-        raise RuntimeError("Bridge Hermes não configurado")
-    body=json.dumps({"prompt":prompt,"model":"gpt-image-2","size":"1024x1024"}).encode("utf-8")
-    req=urllib.request.Request(BRIDGE_UPSTREAM+"/v1/images/generations",data=body,method="POST",headers={
-        "Authorization":"Bearer "+BRIDGE_KEY,
-        "Content-Type":"application/json",
-        "Accept":"application/json",
-    })
-    with urllib.request.urlopen(req,timeout=900) as res:
-        return json.load(res)
-
-def fetch_bridge_image(image_id):
-    req=urllib.request.Request(BRIDGE_UPSTREAM+"/v1/images/"+image_id,headers={
-        "Authorization":"Bearer "+BRIDGE_KEY,
-        "Accept":"image/*",
-    })
-    with urllib.request.urlopen(req,timeout=120) as res:
-        return res.read(), res.headers.get("Content-Type","image/png")
 
 def call_upstream(payload):
     """Use the isolated bridge as the single stable chat path."""
@@ -341,17 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path=="/health":
             return self.sendb(200,'{"status":"ok"}')
         if not self.require_auth(): return
-        path=self.path.split("?",1)[0]
-        if path.startswith("/api/image/"):
-            try:
-                image_id=path.rsplit("/",1)[-1]
-                raw,ctype=fetch_bridge_image(image_id)
-                return self.sendb(200,raw,ctype)
-            except urllib.error.HTTPError as e:
-                return self.sendb(e.code,e.read() or b'{"error":"image_not_found"}')
-            except Exception:
-                return self.sendb(502,b'{"error":"image_unavailable"}')
-        if path in ("/","/index.html","/chat"):
+        if self.path.split("?",1)[0] in ("/","/index.html","/chat"):
             return self.sendb(200,HTML,"text/html; charset=utf-8")
         return self.sendb(404,'{"error":"not_found"}')
     def do_POST(self):
@@ -366,37 +321,6 @@ class Handler(BaseHTTPRequestHandler):
             route=(msg.get("route") or "auto").strip()
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
-            route_meta=classify_route(text, route)
-            if is_image_generation_request(text):
-                try:
-                    img=call_bridge_image(text)
-                except urllib.error.HTTPError as e:
-                    raw=e.read(8192)
-                    detail=""
-                    try:
-                        payload=json.loads(raw or b"{}")
-                        detail=((payload.get("error") or {}).get("message") if isinstance(payload.get("error"),dict) else payload.get("error")) or ""
-                    except Exception:
-                        detail=""
-                    if e.code==429:
-                        msg="O gerador de imagem está indisponível no momento porque o provider atingiu limite/quota. A sua mensagem foi recebida normalmente; o problema está somente na geração da imagem."
-                    else:
-                        msg="O gerador de imagem respondeu com erro HTTP "+str(e.code)+(". "+detail[:180] if detail else "")
-                    return self.sendb(200,json.dumps({
-                        "text":msg,
-                        "via":"image-error",
-                        "routeMeta":{"category":"Imagem","skill":"image-generation","provider":"Provider indisponível"}
-                    },ensure_ascii=False))
-                image_id=img.get("id")
-                if not image_id:
-                    raise RuntimeError("Imagem gerada sem identificador")
-                used_model=img.get("model") or "gpt-image-2"
-                return self.sendb(200,json.dumps({
-                    "text":"Imagem gerada.",
-                    "via":"image",
-                    "imageUrl":"/api/image/"+image_id,
-                    "routeMeta":{"category":"Imagem","skill":"image-generation","provider":"OpenAI · "+used_model}
-                },ensure_ascii=False))
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="matrix":
                 payload.update({"provider":"matrix","model":"claude-opus-5"})
@@ -406,7 +330,7 @@ class Handler(BaseHTTPRequestHandler):
             out=response_text(data)
             if not out:
                 out="O Hermes concluiu a execução, mas não retornou texto."
-            return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":route_meta},ensure_ascii=False))
+            return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":classify_route(text, route)},ensure_ascii=False))
         except Exception as e:
             print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:500],flush=True)
             return self.sendb(502,json.dumps({"error":"Não consegui falar com o Hermes agora. Tente novamente.","type":type(e).__name__},ensure_ascii=False))
