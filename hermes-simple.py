@@ -61,6 +61,8 @@ button,input,textarea,select{font:inherit}
 .routebadge{font-size:11px;line-height:1;border:1px solid #deded8;background:#f6f6f3;color:#555b63;border-radius:999px;padding:5px 7px}
 .routebadge.provider{background:#eef5ff;border-color:#d7e5fb;color:#34506f}
 .routebadge.skill{background:#f5f0ff;border-color:#e4d8fb;color:#5b3d86}
+.generated-image{display:block;max-width:min(100%,720px);height:auto;border-radius:14px;border:1px solid var(--line);margin-top:10px;box-shadow:var(--shadow);cursor:pointer}
+.inline-link{color:#2563eb;text-decoration:underline;word-break:break-all}
 .composerbar{position:fixed;left:260px;right:0;bottom:0;padding:18px 22px 24px;background:linear-gradient(transparent,var(--bg) 32%)}
 .composer{max-width:820px;margin:0 auto;background:#fff;border:1px solid #dadad6;border-radius:18px;box-shadow:var(--shadow);padding:9px 10px 9px 14px;display:flex;align-items:flex-end;gap:8px}
 textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180px;padding:8px 2px;background:transparent;line-height:1.45}
@@ -135,10 +137,27 @@ function renderHistory(){
    save();render();
  });
 }
+function linkifyText(text){
+ const safe=esc(text||'');
+ return safe.replace(/(https?:\/\/[^\s<]+)/g,'<a class="inline-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+function firstUrl(text){
+ const m=(text||'').match(/https?:\/\/[^\s<>"']+/);
+ return m?m[0]:null;
+}
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>{
+   const role=m.role==='assistant'?'<div class="role">Hermes</div>':'';
+   const body=m.error?'<div class="err">'+esc(m.text)+'</div>':linkifyText(m.text);
+   let image='';
+   if(m.role==='assistant' && m.routeMeta && m.routeMeta.category==='Imagem'){
+     const u=firstUrl(m.text);
+     if(u) image='<img class="generated-image" src="'+esc(u)+'" alt="Imagem gerada pelo Hermes" onclick="window.open(this.src, \'_blank\')" onerror="this.style.display=\'none\'"/>';
+   }
+   return '<div class="msg '+m.role+'"><div class="bubble">'+role+body+image+'</div></div>';
+ }).join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
