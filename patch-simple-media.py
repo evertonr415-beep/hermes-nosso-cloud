@@ -39,12 +39,78 @@ helper = '''def cache_internal_media_from_text(text):
         print(f'[hermes-simple] Hermes MEDIA fetch skipped type={type(exc).__name__}', flush=True)
         return None, text
 
+
+def is_image_generation_request(text):
+    t = (text or '').lower()
+    verbs = ('crie ', 'criar ', 'gere ', 'gerar ', 'faça ', 'faca ', 'desenhe ', 'produza ')
+    nouns = ('imagem', 'foto', 'ilustração', 'ilustracao', 'arte')
+    return any(v in t for v in verbs) and any(n in t for n in nouns)
+
+
+def generate_zero_cost_image(prompt):
+    from gradio_client import Client
+    token = (os.getenv('HF_TOKEN') or '').strip() or None
+    space = (os.getenv('HF_ZERO_IMAGE_SPACE') or 'mrfakename/Z-Image-Turbo').strip()
+    client = Client(space, token=token, verbose=False)
+    api_name = '/generate_image'
+    try:
+        info = client.view_api(return_format='dict') or {}
+        endpoints = info.get('named_endpoints') or {}
+        if api_name not in endpoints and endpoints:
+            candidates = [name for name, spec in endpoints.items() if len((spec or {}).get('parameters') or []) >= 6]
+            api_name = candidates[0] if candidates else next(iter(endpoints))
+    except Exception:
+        pass
+    result = client.predict(prompt, 1024, 1024, 9, 42, True, api_name=api_name)
+    image_result = result[0] if isinstance(result, (tuple, list)) else result
+    path = None
+    if isinstance(image_result, str):
+        path = image_result
+    elif isinstance(image_result, dict):
+        path = image_result.get('path') or image_result.get('name')
+    else:
+        path = getattr(image_result, 'path', None) or getattr(image_result, 'name', None)
+    if not path or not os.path.isfile(path):
+        raise RuntimeError('zerogpu_image_missing')
+    with open(path, 'rb') as fh:
+        raw = fh.read(25 * 1024 * 1024 + 1)
+    if len(raw) > 25 * 1024 * 1024:
+        raise RuntimeError('zerogpu_image_too_large')
+    mime = 'image/png'
+    low = path.lower()
+    if low.endswith(('.jpg', '.jpeg')): mime = 'image/jpeg'
+    elif low.endswith('.webp'): mime = 'image/webp'
+    mid = store_media(raw, mime)
+    print(f'[hermes-simple] ZeroGPU image success bytes={len(raw)}', flush=True)
+    return mid
+
 '''
 
 if 'def cache_internal_media_from_text(text):' not in s:
     s = s.replace(anchor, helper + anchor)
+elif 'def generate_zero_cost_image(prompt):' not in s:
+    s = s.replace(anchor, helper.split('def response_text(data):')[0] + anchor)
 
-old = '''            route_meta=classify_route(text, route)
+old = '''            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
+            if route=="matrix":
+'''
+new = '''            if is_image_generation_request(text):
+                try:
+                    mid=generate_zero_cost_image(text)
+                    meta={"category":"Imagem","skill":"image-generation","provider":"Hugging Face ZeroGPU · grátis"}
+                    return self.sendb(200,json.dumps({"text":"Imagem gerada pelo modo gratuito.","via":"huggingface-zerogpu","routeMeta":meta,"imageUrl":"/api/media/"+mid},ensure_ascii=False))
+                except Exception as exc:
+                    print(f"[hermes-simple] ZeroGPU image unavailable type={type(exc).__name__}",flush=True)
+                    meta={"category":"Imagem","skill":"image-generation","provider":"Hugging Face ZeroGPU · grátis"}
+                    return self.sendb(200,json.dumps({"text":"A geração gratuita de imagem está sem capacidade agora. Não usei nenhum provider pago. Tente novamente em alguns minutos.","via":"huggingface-zerogpu-unavailable","routeMeta":meta,"imageUrl":None},ensure_ascii=False))
+            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
+            if route=="matrix":
+'''
+if old not in s:
+    raise SystemExit('chat payload anchor not found')
+s = s.replace(old, new)
+
+old2 = '''            route_meta=classify_route(text, route)
             image_url=None
             if route_meta.get("category")=="Imagem":
                 mid=cache_image_from_text(out)
@@ -52,7 +118,7 @@ old = '''            route_meta=classify_route(text, route)
                     image_url="/api/media/"+mid
             return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":route_meta,"imageUrl":image_url},ensure_ascii=False))
 '''
-new = '''            route_meta=classify_route(text, route)
+new2 = '''            route_meta=classify_route(text, route)
             image_url=None
             internal_mid, cleaned_out = cache_internal_media_from_text(out)
             if internal_mid:
@@ -64,8 +130,7 @@ new = '''            route_meta=classify_route(text, route)
                     image_url="/api/media/"+mid
             return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":route_meta,"imageUrl":image_url},ensure_ascii=False))
 '''
+if old2 in s:
+    s = s.replace(old2, new2)
 
-if old not in s:
-    raise SystemExit('image response anchor not found')
-s = s.replace(old, new)
 p.write_text(s)
