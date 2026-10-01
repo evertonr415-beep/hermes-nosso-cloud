@@ -2,5 +2,7 @@ FROM python:3.12-alpine
 WORKDIR /app
 RUN apk add --no-cache ffmpeg
 COPY hermes-simple.py /app/hermes-simple.py
+COPY patch-simple-media.py /tmp/patch-simple-media.py
+RUN python /tmp/patch-simple-media.py && rm -f /tmp/patch-simple-media.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
