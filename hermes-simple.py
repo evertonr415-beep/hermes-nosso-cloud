@@ -95,11 +95,11 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
     <header class="topbar">
       <button class="menu" id="menu">☰</button>
       <select class="model" id="model">
-        <option value="auto">Automático · Inteligência forte</option>
+        <option value="auto">Automático · GPT-6 Sol</option>
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
       </select>
-      <span class="zerocost">Mídia grátis primeiro</span><div class="status" id="status">pronto · estável</div>
+      <span class="zerocost">Zero Cost Mode</span><div class="status" id="status">pronto · estável</div>
     </header>
     <div class="chatwrap" id="chatwrap"><div class="chat" id="chat"></div></div>
     <div class="composerbar">
@@ -110,7 +110,7 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
         <button class="send" id="send" aria-label="Enviar">↑</button>
       </div>
       <div class="attachstate" id="attachstate"></div>
-      <div class="note">Modo híbrido: cérebro forte no Automático · imagem/vídeo e ferramentas tentam recursos gratuitos/local primeiro.</div>
+      <div class="note">Zero Cost Mode: vídeo com imagem anexada é gerado localmente. Provider pago não é usado nesse caminho.</div>
     </div>
   </main>
 </div>
@@ -136,7 +136,7 @@ function current(){return conversations.find(c=>c.id===active)}
 function ensure(){
  if(!current()){const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save()}
 }
-function esc(s){return (s||'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function renderHistory(){
  historyEl.innerHTML=conversations.map(c=>'<div class="histrow"><button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button><button class="delchat" data-del="'+c.id+'" title="Excluir conversa">×</button></div>').join('');
  historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')});
@@ -153,7 +153,7 @@ function linkifyText(text){
  return safe.replace(/(https?:\/\/[^\s<]+)/g,'<a class="inline-link" href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 }
 function firstUrl(text){
- const m=(text||'').match(/https?:\/\/[^\s<>\"']+/);
+ const m=(text||'').match(/https?:\/\/[^\s<>"']+/);
  return m?m[0]:null;
 }
 function render(){
@@ -225,6 +225,7 @@ def auth_ok(headers):
         return False
 
 def call_upstream(payload):
+    """Use the isolated bridge as the single stable chat path."""
     if not BRIDGE_KEY:
         raise RuntimeError("Bridge Hermes não configurado")
     body = json.dumps(payload).encode("utf-8")
@@ -241,30 +242,54 @@ def call_upstream(payload):
         raise RuntimeError(f"bridge HTTP {e.code}: " + raw.decode("utf-8","ignore")[:400]) from e
 
 def bridge_smoke():
+    """One bounded startup self-test. Never logs credentials."""
     if not BRIDGE_KEY:
         print("[hermes-simple] bridge-smoke skipped: missing bridge key", flush=True)
         return
     try:
-        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/models", headers={"Authorization": "Bearer " + BRIDGE_KEY,"Accept": "application/json"})
+        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/models", headers={
+            "Authorization": "Bearer " + BRIDGE_KEY,
+            "Accept": "application/json",
+        })
         with urllib.request.urlopen(req, timeout=15) as res:
             data = json.load(res)
-        print(f"[hermes-simple] bridge-models status=200 models_ok={str(bool(data.get('data'))).lower()}", flush=True)
+        models_ok = bool(data.get("data"))
+        print(f"[hermes-simple] bridge-models status=200 models_ok={str(models_ok).lower()}", flush=True)
+    except urllib.error.HTTPError as e:
+        print(f"[hermes-simple] bridge-models status={e.code}", flush=True)
+        return
     except Exception as e:
         print(f"[hermes-simple] bridge-models error={type(e).__name__}", flush=True)
         return
+
     try:
-        body = json.dumps({"model": "hermes-agent","messages": [{"role": "user", "content": "Reply only: HERMES_SIMPLE_OK"}],"stream": False}).encode("utf-8")
-        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/chat/completions", data=body, method="POST", headers={"Authorization": "Bearer " + BRIDGE_KEY,"Content-Type": "application/json","Accept": "application/json"})
+        body = json.dumps({
+            "model": "hermes-agent",
+            "messages": [{"role": "user", "content": "Reply only: HERMES_SIMPLE_OK"}],
+            "stream": False,
+        }).encode("utf-8")
+        req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/chat/completions", data=body, method="POST", headers={
+            "Authorization": "Bearer " + BRIDGE_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        })
         with urllib.request.urlopen(req, timeout=90) as res:
             data = json.load(res)
         text = str((((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""))
         print(f"[hermes-simple] bridge-chat status=200 ok={str('HERMES_SIMPLE_OK' in text).lower()}", flush=True)
+    except urllib.error.HTTPError as e:
+        print(f"[hermes-simple] bridge-chat status={e.code}", flush=True)
     except Exception as e:
         print(f"[hermes-simple] bridge-chat error={type(e).__name__}", flush=True)
 
+
 def classify_route(text, route="auto"):
+    """Best-effort display metadata only; execution still happens in Hermes."""
     t = (text or "").lower()
-    def has(*terms): return any(term in t for term in terms)
+
+    def has(*terms):
+        return any(term in t for term in terms)
+
     category, skill, provider = "Geral", "", ""
     if has("vídeo", "video", "animar", "animação", "reels", "shorts"):
         category = "Vídeo"
@@ -272,8 +297,8 @@ def classify_route(text, route="auto"):
             skill, provider = "manim-video", "Manim"
         else:
             skill, provider = "video-local", "Local · custo zero"
-    elif has("imagem", "foto", "editar foto", "remover fundo", "recortar", "upscale"):
-        category, skill, provider = "Imagem", "image-editing", "Grátis primeiro"
+    elif has("imagem", "foto", "foto ", "editar foto", "remover fundo", "recortar", "upscale"):
+        category, skill, provider = "Imagem", "image-editing", "Gerador de imagem"
     elif has("gráfico", "grafico", "dashboard", "estatística", "estatistica", "plot"):
         category, skill, provider = "Dados", "jupyter-live-kernel", "Python/Jupyter"
     elif has("excel", "xlsx", "planilha"):
@@ -297,12 +322,17 @@ def classify_route(text, route="auto"):
     elif has("navegador", "browser", "clique", "preencha", "interface"):
         category, skill, provider = "Automação", "computer-use", "Browser"
     elif has("música", "musica", "áudio", "audio", "som", "efeito sonoro", "voz"):
-        category, skill, provider = "Áudio", "songwriting-and-ai-music", "Grátis primeiro"
+        category, skill, provider = "Áudio", "songwriting-and-ai-music", "Áudio/externo"
     elif has("código", "codigo", "bug", "erro", "debug", "programa", "script"):
         category, skill, provider = "Código", "systematic-debugging", "Hermes"
-    if route == "matrix": provider = "Matrix" if category == "Geral" else provider
-    elif route == "local": provider = "Hermes Local" if category == "Geral" else provider
-    elif route == "auto" and category == "Geral": provider = "Hermes · inteligência forte"
+
+    if route == "matrix":
+        provider = "Matrix" if category == "Geral" else provider
+    elif route == "local":
+        provider = "Hermes Local" if category == "Geral" else provider
+    elif route == "auto" and category == "Geral":
+        provider = "GPT-6 Sol"
+
     return {"category": category, "skill": skill, "provider": provider}
 
 def cache_image_from_text(text):
@@ -313,15 +343,25 @@ def cache_image_from_text(text):
             req=urllib.request.Request(url,headers={"User-Agent":"Mozilla/5.0","Accept":"image/*,*/*;q=0.8"})
             with urllib.request.urlopen(req,timeout=12) as res:
                 ctype=(res.headers.get("Content-Type","") or "").split(";",1)[0].strip().lower()
-                if not ctype.startswith("image/"): continue
+                if not ctype.startswith("image/"):
+                    continue
                 length=res.headers.get("Content-Length")
-                if length and int(length)>15*1024*1024: continue
+                if length and int(length)>15*1024*1024:
+                    continue
                 raw=res.read(15*1024*1024+1)
-                if len(raw)>15*1024*1024: continue
-            mid=store_media(raw,ctype or "image/png")
+                if len(raw)>15*1024*1024:
+                    continue
+            mid=uuid.uuid4().hex
+            now=time.time()
+            with MEDIA_LOCK:
+                for key,val in list(MEDIA_STORE.items()):
+                    if now-val["created"]>MEDIA_TTL:
+                        MEDIA_STORE.pop(key,None)
+                MEDIA_STORE[mid]={"bytes":raw,"mime":ctype or "image/png","created":now}
+            print(f"[hermes-simple] cached inline image bytes={len(raw)}",flush=True)
             return mid
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[hermes-simple] inline image fetch skipped type={type(e).__name__}",flush=True)
     return None
 
 def store_media(raw, mime):
@@ -329,7 +369,8 @@ def store_media(raw, mime):
     now=time.time()
     with MEDIA_LOCK:
         for key,val in list(MEDIA_STORE.items()):
-            if now-val["created"]>MEDIA_TTL: MEDIA_STORE.pop(key,None)
+            if now-val["created"]>MEDIA_TTL:
+                MEDIA_STORE.pop(key,None)
         MEDIA_STORE[mid]={"bytes":raw,"mime":mime,"created":now}
     return mid
 
@@ -345,7 +386,10 @@ def generate_local_video(image_bytes, mime):
         src=os.path.join(td,"input"+suffix)
         out=os.path.join(td,"output.mp4")
         with open(src,"wb") as fh: fh.write(image_bytes)
-        vf=("scale=1080:1920:force_original_aspect_ratio=decrease," "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black," "zoompan=z='min(zoom+0.0008,1.10)':d=150:s=1080x1920:fps=30," "format=yuv420p")
+        vf=("scale=1080:1920:force_original_aspect_ratio=decrease,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,"
+            "zoompan=z='min(zoom+0.0008,1.10)':d=150:s=1080x1920:fps=30,"
+            "format=yuv420p")
         cmd=["ffmpeg","-y","-loop","1","-i",src,"-vf",vf,"-t","5","-c:v","libx264","-preset","veryfast","-crf","23","-movflags","+faststart",out]
         p=subprocess.run(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=90)
         if p.returncode!=0: raise RuntimeError("ffmpeg_failed")
@@ -357,70 +401,104 @@ def response_text(data):
     for item in data.get("output",[]) or []:
         if item.get("type")=="message":
             for c in item.get("content",[]) or []:
-                if c.get("type") in ("output_text","text") and c.get("text"): parts.append(c["text"])
-    if parts: return "\n".join(parts).strip()
-    if isinstance(data.get("output_text"), str): return data["output_text"].strip()
+                if c.get("type") in ("output_text","text") and c.get("text"):
+                    parts.append(c["text"])
+    if parts:
+        return "\n".join(parts).strip()
+    if isinstance(data.get("output_text"), str):
+        return data["output_text"].strip()
     return ""
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version="HTTP/1.1"
-    def log_message(self, fmt, *args): print("[hermes-simple] "+(fmt%args), flush=True)
+    def log_message(self, fmt, *args):
+        print("[hermes-simple] "+(fmt%args), flush=True)
     def sendb(self,status,body,ctype="application/json; charset=utf-8"):
         if isinstance(body,str): body=body.encode()
-        self.send_response(status); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(body))); self.send_header("Cache-Control","no-store"); self.end_headers(); self.wfile.write(body)
+        self.send_response(status)
+        self.send_header("Content-Type",ctype)
+        self.send_header("Content-Length",str(len(body)))
+        self.send_header("Cache-Control","no-store")
+        self.end_headers()
+        self.wfile.write(body)
     def require_auth(self):
         if auth_ok(self.headers): return True
-        self.send_response(401); self.send_header("WWW-Authenticate",'Basic realm="Hermes"'); self.send_header("Content-Length","0"); self.end_headers(); return False
+        self.send_response(401)
+        self.send_header("WWW-Authenticate",'Basic realm="Hermes"')
+        self.send_header("Content-Length","0")
+        self.end_headers()
+        return False
     def do_GET(self):
-        if self.path=="/health": return self.sendb(200,'{"status":"ok"}')
+        if self.path=="/health":
+            return self.sendb(200,'{"status":"ok"}')
         if not self.require_auth(): return
         path=self.path.split("?",1)[0]
         if path.startswith("/api/media/"):
             mid=path.rsplit("/",1)[-1]
-            with MEDIA_LOCK: item=MEDIA_STORE.get(mid)
-            if not item: return self.sendb(404,'{"error":"media_not_found"}')
+            with MEDIA_LOCK:
+                item=MEDIA_STORE.get(mid)
+            if not item:
+                return self.sendb(404,'{"error":"media_not_found"}')
             return self.sendb(200,item["bytes"],item["mime"])
-        if path in ("/","/index.html","/chat"): return self.sendb(200,HTML,"text/html; charset=utf-8")
+        if self.path.split("?",1)[0] in ("/","/index.html","/chat"):
+            return self.sendb(200,HTML,"text/html; charset=utf-8")
         return self.sendb(404,'{"error":"not_found"}')
     def do_POST(self):
         if not self.require_auth(): return
-        if self.path not in ("/api/chat","/api/upload"): return self.sendb(404,'{"error":"not_found"}')
+        if self.path not in ("/api/chat","/api/upload"):
+            return self.sendb(404,'{"error":"not_found"}')
         try:
             n=int(self.headers.get("Content-Length","0"))
-            if n>18*1024*1024: return self.sendb(413,'{"error":"Arquivo muito grande"}')
+            if n>18*1024*1024:
+                return self.sendb(413,'{"error":"Arquivo muito grande"}')
             msg=json.loads(self.rfile.read(n) or b"{}")
             if self.path=="/api/upload":
-                data=(msg.get("data") or ""); mime=(msg.get("mime") or "image/png").lower()
-                if not mime.startswith("image/") or "," not in data: return self.sendb(400,'{"error":"Imagem inválida"}')
+                data=(msg.get("data") or "")
+                mime=(msg.get("mime") or "image/png").lower()
+                if not mime.startswith("image/") or "," not in data:
+                    return self.sendb(400,'{"error":"Imagem inválida"}')
                 raw=base64.b64decode(data.split(",",1)[1],validate=False)
-                if len(raw)>12*1024*1024: return self.sendb(413,'{"error":"Imagem muito grande"}')
+                if len(raw)>12*1024*1024:
+                    return self.sendb(413,'{"error":"Imagem muito grande"}')
                 mid=store_media(raw,mime)
                 return self.sendb(200,json.dumps({"id":mid,"url":"/api/media/"+mid},ensure_ascii=False))
-            text=(msg.get("input") or "").strip(); conv=(msg.get("conversation") or "").strip(); route=(msg.get("route") or "auto").strip(); attachment_id=(msg.get("attachmentId") or "").strip()
-            if not text: return self.sendb(400,'{"error":"Mensagem vazia"}')
+            text=(msg.get("input") or "").strip()
+            conv=(msg.get("conversation") or "").strip()
+            route=(msg.get("route") or "auto").strip()
+            attachment_id=(msg.get("attachmentId") or "").strip()
+            if not text:
+                return self.sendb(400,'{"error":"Mensagem vazia"}')
             if attachment_id and is_video_request(text):
-                with MEDIA_LOCK: item=MEDIA_STORE.get(attachment_id)
-                if not item or not str(item.get("mime","")).startswith("image/"): return self.sendb(400,json.dumps({"error":"A imagem anexada não está mais disponível. Anexe novamente."},ensure_ascii=False))
+                with MEDIA_LOCK:
+                    item=MEDIA_STORE.get(attachment_id)
+                if not item or not str(item.get("mime","")).startswith("image/"):
+                    return self.sendb(400,json.dumps({"error":"A imagem anexada não está mais disponível. Anexe novamente."},ensure_ascii=False))
                 vid=generate_local_video(item["bytes"],item["mime"])
                 meta={"category":"Vídeo","skill":"video-local","provider":"Local · custo zero"}
                 return self.sendb(200,json.dumps({"text":"Vídeo criado localmente em 5 segundos, sem usar provider pago.","via":"local-ffmpeg","routeMeta":meta,"videoUrl":"/api/media/"+vid},ensure_ascii=False))
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
-            if route=="matrix": payload.update({"provider":"matrix","model":"claude-opus-5"})
-            elif route=="local": payload.update({"provider":"hermes-local","model":"hermes-agent"})
+            if route=="matrix":
+                payload.update({"provider":"matrix","model":"claude-opus-5"})
+            elif route=="local":
+                payload.update({"provider":"hermes-local","model":"hermes-agent"})
             data, via=call_upstream(payload)
-            out=response_text(data) or "O Hermes concluiu a execução, mas não retornou texto."
+            out=response_text(data)
+            if not out:
+                out="O Hermes concluiu a execução, mas não retornou texto."
             route_meta=classify_route(text, route)
             image_url=None
             if route_meta.get("category")=="Imagem":
                 mid=cache_image_from_text(out)
-                if mid: image_url="/api/media/"+mid
+                if mid:
+                    image_url="/api/media/"+mid
             return self.sendb(200,json.dumps({"text":out,"via":via,"routeMeta":route_meta,"imageUrl":image_url},ensure_ascii=False))
         except Exception as e:
             print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:500],flush=True)
             return self.sendb(502,json.dumps({"error":"Não consegui falar com o Hermes agora. Tente novamente.","type":type(e).__name__},ensure_ascii=False))
 
 if __name__=="__main__":
-    if not PASSWORD: raise SystemExit("HERMES_DASHBOARD_BASIC_AUTH_PASSWORD missing")
+    if not PASSWORD:
+        raise SystemExit("HERMES_DASHBOARD_BASIC_AUTH_PASSWORD missing")
     print(f"[hermes-simple] listening on 0.0.0.0:{PORT}",flush=True)
     threading.Thread(target=bridge_smoke, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0",PORT),Handler).serve_forever()
