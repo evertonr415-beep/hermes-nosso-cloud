@@ -28,6 +28,7 @@ COPY patch-chat-resilience.py /tmp/patch-chat-resilience.py
 COPY patch-local-profile-fallback.py /tmp/patch-local-profile-fallback.py
 COPY patch-admin-rules.py /tmp/patch-admin-rules.py
 COPY patch-admin-rules-indent-fix.py /tmp/patch-admin-rules-indent-fix.py
+COPY patch-image-fidelity.py /tmp/patch-image-fidelity.py
 RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-image-reliability.py \
  && python /tmp/patch-media-v2.py \
@@ -53,6 +54,7 @@ RUN python /tmp/patch-simple-media.py \
  && python /tmp/patch-local-profile-fallback.py \
  && python /tmp/patch-admin-rules.py \
  && python /tmp/patch-admin-rules-indent-fix.py \
- && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py /tmp/patch-real-person-reference.py /tmp/patch-reference-search-fallback.py /tmp/patch-real-person-resilience.py /tmp/patch-real-people-grounded-skill.py /tmp/patch-private-auth.py /tmp/fix-private-auth-patch.py /tmp/patch-owner-cross-device-login.py /tmp/patch-persistent-media.py /tmp/patch-recover-lost-images.py /tmp/patch-cross-device-consistency.py /tmp/patch-account-profile.py /tmp/patch-paid-character-images.py /tmp/patch-chat-resilience.py /tmp/patch-local-profile-fallback.py /tmp/patch-admin-rules.py /tmp/patch-admin-rules-indent-fix.py
+ && python /tmp/patch-image-fidelity.py \
+ && rm -f /tmp/patch-simple-media.py /tmp/patch-image-reliability.py /tmp/patch-media-v2.py /tmp/patch-video-media.py /tmp/patch-hybrid-mode.py /tmp/patch-attachment-ux.py /tmp/patch-multimodal-attachment.py /tmp/patch-owner-mode.py /tmp/patch-image-intent.py /tmp/patch-real-person-reference.py /tmp/patch-reference-search-fallback.py /tmp/patch-real-person-resilience.py /tmp/patch-real-people-grounded-skill.py /tmp/patch-private-auth.py /tmp/fix-private-auth-patch.py /tmp/patch-owner-cross-device-login.py /tmp/patch-persistent-media.py /tmp/patch-recover-lost-images.py /tmp/patch-cross-device-consistency.py /tmp/patch-account-profile.py /tmp/patch-paid-character-images.py /tmp/patch-chat-resilience.py /tmp/patch-local-profile-fallback.py /tmp/patch-admin-rules.py /tmp/patch-admin-rules-indent-fix.py /tmp/patch-image-fidelity.py
 EXPOSE 9119
 CMD ["python","/app/hermes-simple.py"]
