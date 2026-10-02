@@ -139,6 +139,104 @@ p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding
 PY
 fi
 
+# One-time bootstrap for the six curated plugins explicitly selected by the owner.
+# Uses Hermes' catalog installer, pinned catalog commits and normal admission checks.
+# Privileged plugin capabilities are not force-granted here; Hermes remains fail-closed
+# for any capability a plugin declares beyond its normal tool/hook surface.
+if [ "${HERMES_CURATED_PLUGINS_BOOTSTRAP:-1}" = "1" ] && [ ! -f /opt/data/.curated-plugins-v1.done ]; then
+  (
+    sleep 15
+    /opt/hermes/.venv/bin/python - <<'PY'
+from pathlib import Path
+import json
+
+from hermes_constants import set_hermes_home_override, reset_hermes_home_override
+
+home = Path("/opt/data")
+marker = home / ".curated-plugins-v1.done"
+wanted = (
+    "afterforge",
+    "tool-slimmer",
+    "toolaria",
+    "skill-retrieval",
+    "tokenwatch",
+    "memory-rewind",
+)
+
+token = set_hermes_home_override(home)
+summary = {}
+try:
+    from hermes_cli.plugins_cmd import (
+        _discover_all_plugins,
+        _get_disabled_set,
+        _get_enabled_set,
+        dashboard_install_plugin,
+        dashboard_set_agent_plugin_enabled,
+    )
+
+    def discovered_aliases():
+        aliases = set()
+        for row in _discover_all_plugins():
+            try:
+                if row[0]:
+                    aliases.add(str(row[0]))
+                if row[5]:
+                    aliases.add(str(row[5]))
+            except Exception:
+                continue
+        return aliases
+
+    aliases = discovered_aliases()
+    for name in wanted:
+        try:
+            if name in aliases:
+                result = dashboard_set_agent_plugin_enabled(name, enabled=True)
+                summary[name] = {
+                    "action": "already-installed-enable-check",
+                    "ok": bool(result.get("ok", False)),
+                    "error": result.get("error"),
+                }
+            else:
+                result = dashboard_install_plugin(
+                    "",
+                    force=False,
+                    enable=True,
+                    catalog_name=name,
+                    assume_deps_consent=True,
+                )
+                summary[name] = {
+                    "action": "installed",
+                    "ok": bool(result.get("ok", False)),
+                    "enabled": bool(result.get("enabled", False)),
+                    "missing_env": result.get("missing_env", []),
+                    "warnings": result.get("warnings", []),
+                    "error": result.get("error"),
+                }
+        except Exception as exc:
+            summary[name] = {
+                "action": "error",
+                "ok": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        aliases = discovered_aliases()
+
+    aliases = discovered_aliases()
+    enabled = set(_get_enabled_set())
+    disabled = set(_get_disabled_set())
+    all_ok = all(name in aliases and name in enabled and name not in disabled for name in wanted)
+
+    print("[plugin-bootstrap] " + json.dumps(summary, ensure_ascii=False, sort_keys=True), flush=True)
+    print(f"[plugin-bootstrap] complete={str(all_ok).lower()} enabled={sorted(enabled & set(wanted))}", flush=True)
+    if all_ok:
+        marker.write_text(json.dumps({"plugins": list(wanted)}, ensure_ascii=False) + "\n", encoding="utf-8")
+except Exception as exc:
+    print(f"[plugin-bootstrap] fatal={type(exc).__name__}: {exc}", flush=True)
+finally:
+    reset_hermes_home_override(token)
+PY
+  ) &
+fi
+
 # The Hermes Docker image already owns gateway/API supervision through s6.
 # Do not launch a second gateway here. HERMES_GATEWAY_BOOTSTRAP_STATE=running
 # and API_SERVER_* configure the single supervised gateway after s6 is ready.
