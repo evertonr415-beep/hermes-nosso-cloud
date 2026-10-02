@@ -13,14 +13,14 @@ helper=r'''def apply_image_fidelity_prompt(prompt):
     req=[]
 
     locations=[
-        (('na cama','em uma cama','sobre a cama','cama'), 'CENÁRIO OBRIGATÓRIO: a personagem deve estar claramente em/sobre uma cama visível no enquadramento. Não substituir a cama por sofá, cadeira, poltrona ou fundo de estúdio.'),
-        (('no sofá','no sofa','em um sofá','em um sofa'), 'CENÁRIO OBRIGATÓRIO: a personagem deve estar claramente em um sofá visível. Não substituir por cama, cadeira ou poltrona.'),
-        (('na cadeira','em uma cadeira'), 'CENÁRIO OBRIGATÓRIO: a personagem deve estar claramente em uma cadeira visível. Não substituir por cama, sofá ou poltrona.'),
-        (('na poltrona','em uma poltrona'), 'CENÁRIO OBRIGATÓRIO: a personagem deve estar claramente em uma poltrona visível. Não substituir por cama, sofá ou cadeira.'),
-        (('no escritório','no escritorio','em um escritório','em um escritorio'), 'CENÁRIO OBRIGATÓRIO: usar um escritório claramente reconhecível, com elementos de ambiente de trabalho visíveis.'),
-        (('na cozinha','em uma cozinha'), 'CENÁRIO OBRIGATÓRIO: usar uma cozinha claramente reconhecível e visível no enquadramento.'),
-        (('no banheiro','em um banheiro'), 'CENÁRIO OBRIGATÓRIO: usar um banheiro claramente reconhecível e visível no enquadramento.'),
-        (('na varanda','em uma varanda'), 'CENÁRIO OBRIGATÓRIO: usar uma varanda claramente reconhecível e visível no enquadramento.'),
+        (('na cama','em uma cama','sobre a cama','cama'), 'The requested scene must clearly show the subject on or in a visible bed. Keep the bed as the actual setting; do not replace it with a sofa, chair, armchair or plain studio background.'),
+        (('no sofá','no sofa','em um sofá','em um sofa'), 'The requested scene must clearly show the subject on a visible sofa. Do not replace it with a bed, chair or armchair.'),
+        (('na cadeira','em uma cadeira'), 'The requested scene must clearly show the subject using a visible chair. Do not replace it with a bed, sofa or armchair.'),
+        (('na poltrona','em uma poltrona'), 'The requested scene must clearly show the subject using a visible armchair. Do not replace it with a bed, sofa or chair.'),
+        (('no escritório','no escritorio','em um escritório','em um escritorio'), 'Keep the requested office setting clearly recognizable, with visible workplace elements.'),
+        (('na cozinha','em uma cozinha'), 'Keep the requested kitchen setting clearly recognizable and visible in the frame.'),
+        (('no banheiro','em um banheiro'), 'Keep the requested bathroom setting clearly recognizable and visible in the frame.'),
+        (('na varanda','em uma varanda'), 'Keep the requested balcony setting clearly recognizable and visible in the frame.'),
     ]
     for terms,instruction in locations:
         if any(t in low for t in terms):
@@ -28,33 +28,31 @@ helper=r'''def apply_image_fidelity_prompt(prompt):
             break
 
     poses=[
-        (('sentada','sentado'), 'POSE OBRIGATÓRIA: manter a personagem sentada; não trocar para em pé ou deitada.'),
-        (('deitada','deitado'), 'POSE OBRIGATÓRIA: manter a personagem deitada; não trocar para sentada ou em pé.'),
-        (('em pé','em pe'), 'POSE OBRIGATÓRIA: manter a personagem em pé; não trocar para sentada ou deitada.'),
-        (('ajoelhada','ajoelhado'), 'POSE OBRIGATÓRIA: manter a personagem ajoelhada conforme solicitado.'),
-        (('pernas abertas','joelhos afastados'), 'POSE OBRIGATÓRIA: preservar a posição das pernas descrita pelo usuário, sem substituir por pernas cruzadas ou fechadas.'),
+        (('sentada','sentado'), 'Keep the subject seated as requested; do not change the main pose to standing or lying down.'),
+        (('deitada','deitado'), 'Keep the subject lying down as requested; do not change the main pose to seated or standing.'),
+        (('em pé','em pe'), 'Keep the subject standing as requested; do not change the main pose to seated or lying down.'),
+        (('ajoelhada','ajoelhado'), 'Keep the subject kneeling as requested.'),
+        (('pernas abertas','joelhos afastados'), 'Preserve the requested leg position without changing it to crossed or closed legs.'),
     ]
     for terms,instruction in poses:
         if any(t in low for t in terms):
             req.append(instruction)
 
-    framing=[]
     if any(t in low for t in ('corpo inteiro','de corpo inteiro','full body')):
-        framing.append('ENQUADRAMENTO OBRIGATÓRIO: corpo inteiro visível, sem cortar cabeça ou pés.')
+        req.append('Use a full-body composition with the head and feet visible unless the user explicitly requested otherwise.')
     if any(t in low for t in ('close-up','close up','primeiro plano')):
-        framing.append('ENQUADRAMENTO OBRIGATÓRIO: primeiro plano/close-up conforme solicitado.')
+        req.append('Use the requested close-up framing.')
 
-    rules=[
-        '[FIDELIDADE RÍGIDA AO PEDIDO DE IMAGEM]',
-        'Trate personagem, cenário, pose, enquadramento, estilo e iluminação explicitamente pedidos como requisitos obrigatórios, não como sugestões.',
-        'Não troque o cenário por outro semelhante e não altere a pose principal.',
-        'Preserve a identidade visual da personagem quando houver memória ou referência cadastrada.',
+    # Keep the user's actual scene description first. The following sentences are
+    # silent generation constraints, not content to render inside the picture.
+    constraints=[
+        'Follow the requested character, setting, pose, framing, style and lighting exactly.',
+        'Preserve the character identity when a stored memory or visual reference exists.',
+        'Do not add any written words, captions, labels, signs, banners, subtitles, watermarks or typography to the generated image unless the user explicitly asks for text in the image.',
     ]
-    rules.extend(req)
-    rules.extend(framing)
-    rules.append('PEDIDO ORIGINAL DO USUÁRIO:')
-    rules.append(raw)
-    return '\n'.join(rules)
+    constraints.extend(req)
+    constraints.append('The final picture itself must contain no instructional text or prompt wording.')
+    return raw+'\n\n'+' '.join(constraints)
 
 
 '''
@@ -63,7 +61,6 @@ if 'def apply_image_fidelity_prompt(prompt):' not in s:
         raise SystemExit('image fidelity helper anchor not found')
     s=s.replace(anchor,helper+anchor,1)
 
-# Apply after all account/owner normalization to free generation and edits.
 pat_gen=r'(?m)^(\s*)mid, used_space=generate_zero_cost_image\(effective_image_prompt\)$'
 def repl_gen(m):
     ind=m.group(1)
@@ -76,12 +73,10 @@ def repl_edit(m):
     return ind+'effective_image_prompt=apply_image_fidelity_prompt(effective_image_prompt)\n'+ind+'mid, used_space=generate_zero_cost_edit(item["bytes"], item["mime"], effective_image_prompt)'
 s,n_edit=re.subn(pat_edit,repl_edit,s)
 
-# Paid image route receives the same fidelity reinforcement.
 paid='paid_text=enrich_character_prompt(paid_text,self.headers)\n'
 if paid in s and 'paid_text=apply_image_fidelity_prompt(paid_text)' not in s:
     s=s.replace(paid,paid+'                paid_text=apply_image_fidelity_prompt(paid_text)\n',1)
 
-# Surface the behavior in the owner rules page description without adding a new policy switch.
 s=s.replace(
     'Preferências do proprietário salvas no servidor e aplicadas em qualquer dispositivo.',
     'Preferências do proprietário salvas no servidor e aplicadas em qualquer dispositivo. Cenário, pose e enquadramento pedidos são tratados como requisitos rígidos na geração de imagens.'
