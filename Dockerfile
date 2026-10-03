@@ -52,6 +52,10 @@ COPY patch-entrypoint-stability.py /tmp/patch-entrypoint-stability.py
 RUN python3 /tmp/patch-entrypoint-stability.py \
     && rm -f /tmp/patch-entrypoint-stability.py
 
+# Repair private config/backup ownership before upstream stage2 and the gateway
+# read config.yaml. This runs as an s6 cont-init step before 01-hermes-setup.
+COPY hermes-storage-permissions.sh /etc/cont-init.d/00-hermes-storage-permissions
+
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
 COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
 COPY cron-validation-run.sh /etc/services.d/hermes-cron-validation/run
@@ -63,6 +67,7 @@ COPY plugin-bootstrap-run.sh /etc/services.d/hermes-plugin-bootstrap/run
 RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /usr/local/bin/hermes-smoke-tests \
     /usr/local/bin/hermes-bucket-backup \
+    /etc/cont-init.d/00-hermes-storage-permissions \
     /etc/services.d/hermes-runtime-smoke/run \
     /etc/services.d/hermes-cron-validation/run \
     /etc/services.d/hermes-cron-cleanup/run \
