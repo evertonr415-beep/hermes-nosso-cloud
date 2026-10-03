@@ -5,8 +5,15 @@ export HERMES_HOME=/opt/data
 MARKER=/opt/data/.curated-plugins-v2.done
 PLUGINS="afterforge tool-slimmer toolaria tokenwatch"
 
+# Stability safeguard (2026-10-03): tool-slimmer injects dashboard code and
+# coincides with full-page reload loops on the Models surface in the current
+# upstream dashboard. Keep it installed on disk but disabled until the
+# dashboard/plugin compatibility is fixed upstream.
+timeout 30 hermes plugins disable tool-slimmer >/tmp/plugin-disable-tool-slimmer.log 2>&1 || true
+cat /tmp/plugin-disable-tool-slimmer.log 2>/dev/null || true
+
 if [ -f "$MARKER" ]; then
-  echo "[plugin-bootstrap-v2] already complete"
+  echo "[plugin-bootstrap-v2] already complete (tool-slimmer forced disabled for dashboard stability)"
   exec sleep infinity
 fi
 
@@ -17,6 +24,13 @@ echo "[plugin-bootstrap-v2] starting official CLI installation home=$HERMES_HOME
 all_ok=1
 
 for plugin in $PLUGINS; do
+  # tool-slimmer is intentionally skipped while the dashboard compatibility
+  # issue is active. Other plugins keep their existing bootstrap behavior.
+  if [ "$plugin" = "tool-slimmer" ]; then
+    echo "[plugin-bootstrap-v2] skipping tool-slimmer (dashboard stability safeguard)"
+    continue
+  fi
+
   echo "[plugin-bootstrap-v2] processing $plugin"
   if ! printf 'y\ny\ny\n' | timeout 300 hermes plugins install "$plugin" --enable >/tmp/plugin-install-$plugin.log 2>&1; then
     # An already-installed plugin may make install return non-zero; try the official enable path.
@@ -33,7 +47,7 @@ LIST_OUTPUT="$(timeout 120 hermes plugins list --enabled --user --plain 2>&1 || 
 printf '%s\n' "$LIST_OUTPUT"
 
 # Catalog name afterforge installs with plugin id agent-fix-lab.
-for installed_id in agent-fix-lab tool-slimmer toolaria tokenwatch; do
+for installed_id in agent-fix-lab toolaria tokenwatch; do
   if ! printf '%s\n' "$LIST_OUTPUT" | grep -Fq "$installed_id"; then
     echo "[plugin-bootstrap-v2] missing enabled plugin id=$installed_id"
     all_ok=0
@@ -50,7 +64,7 @@ for installed_id in agent-fix-lab tool-slimmer toolaria tokenwatch; do
 done
 
 if [ "$all_ok" -eq 1 ]; then
-  printf '%s\n' "$PLUGINS" > "$MARKER"
+  printf '%s\n' "afterforge toolaria tokenwatch" > "$MARKER"
   echo "[plugin-bootstrap-v2] complete=true"
 else
   echo "[plugin-bootstrap-v2] complete=false"
