@@ -37,9 +37,11 @@ RUN test -x /opt/hermes/.venv/bin/hermes \
 # browser-side chat/session state once; it never mutates state.db.
 COPY patch-hermes-web-runtime.py /tmp/patch-hermes-web-runtime.py
 COPY patch-hermes-video-runtime.py /tmp/patch-hermes-video-runtime.py
+COPY patch-dashboard-stability.py /tmp/patch-dashboard-stability.py
 RUN python3 /tmp/patch-hermes-web-runtime.py \
     && python3 /tmp/patch-hermes-video-runtime.py \
-    && rm -f /tmp/patch-hermes-web-runtime.py /tmp/patch-hermes-video-runtime.py
+    && python3 /tmp/patch-dashboard-stability.py \
+    && rm -f /tmp/patch-hermes-web-runtime.py /tmp/patch-hermes-video-runtime.py /tmp/patch-dashboard-stability.py
 
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
