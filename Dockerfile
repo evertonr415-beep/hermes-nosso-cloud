@@ -47,13 +47,15 @@ COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
 COPY cron-validation-run.sh /etc/services.d/hermes-cron-validation/run
 COPY bucket-backup.py /usr/local/bin/hermes-bucket-backup
 COPY bucket-backup-run.sh /etc/services.d/hermes-bucket-backup/run
+COPY plugin-bootstrap-run.sh /etc/services.d/hermes-plugin-bootstrap/run
 
 RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /usr/local/bin/hermes-smoke-tests \
     /usr/local/bin/hermes-bucket-backup \
     /etc/services.d/hermes-runtime-smoke/run \
     /etc/services.d/hermes-cron-validation/run \
-    /etc/services.d/hermes-bucket-backup/run
+    /etc/services.d/hermes-bucket-backup/run \
+    /etc/services.d/hermes-plugin-bootstrap/run
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
 CMD ["sleep", "infinity"]
