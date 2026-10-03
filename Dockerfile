@@ -4,6 +4,10 @@ USER root
 
 ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 ENV PATH="/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+# The old entrypoint bootstrap targets six plugins and calls a dashboard helper
+# signature that is no longer valid on Hermes 0.21.x. The supervised
+# hermes-plugin-bootstrap service below owns curated plugin lifecycle instead.
+ENV HERMES_CURATED_PLUGINS_BOOTSTRAP=0
 
 # Add only Hermes Nosso skills that are not already bundled upstream.
 COPY custom-skills.tar.gz.b64 /tmp/custom-skills.tar.gz.b64
