@@ -1,6 +1,7 @@
 #!/bin/sh
 set -u
 
+export HERMES_HOME=/opt/data
 MARKER=/opt/data/.curated-plugins-v2.done
 PLUGINS="afterforge tool-slimmer toolaria tokenwatch"
 
@@ -12,45 +13,38 @@ fi
 # Let the Hermes home/profile initialization finish first.
 sleep 20
 
-echo "[plugin-bootstrap-v2] starting official CLI installation"
+echo "[plugin-bootstrap-v2] starting official CLI installation home=$HERMES_HOME"
 all_ok=1
 
 for plugin in $PLUGINS; do
-  if [ -d "/opt/data/plugins/$plugin" ]; then
-    echo "[plugin-bootstrap-v2] $plugin already present; ensuring enabled"
+  echo "[plugin-bootstrap-v2] processing $plugin"
+  if ! printf 'y\ny\ny\n' | timeout 300 hermes plugins install "$plugin" --enable >/tmp/plugin-install-$plugin.log 2>&1; then
+    # An already-installed plugin may make install return non-zero; try the official enable path.
+    cat /tmp/plugin-install-$plugin.log 2>/dev/null || true
     timeout 120 hermes plugins enable "$plugin" --no-allow-tool-override >/tmp/plugin-enable-$plugin.log 2>&1 || true
     cat /tmp/plugin-enable-$plugin.log 2>/dev/null || true
   else
-    echo "[plugin-bootstrap-v2] installing $plugin"
-    # The owner explicitly approved these four catalog plugins. --enable skips
-    # the enable prompt; stdin answers only dependency-consent prompts from the
-    # official installer. No dependency/admission checks are bypassed.
-    if ! printf 'y\ny\ny\n' | timeout 300 hermes plugins install "$plugin" --enable >/tmp/plugin-install-$plugin.log 2>&1; then
-      rc=$?
-      echo "[plugin-bootstrap-v2] install failed plugin=$plugin rc=$rc"
-      cat /tmp/plugin-install-$plugin.log 2>/dev/null || true
-      all_ok=0
-      continue
-    fi
     cat /tmp/plugin-install-$plugin.log 2>/dev/null || true
-  fi
-
-  echo "[plugin-bootstrap-v2] doctor $plugin"
-  if ! timeout 180 hermes plugins doctor "$plugin" --ci >/tmp/plugin-doctor-$plugin.log 2>&1; then
-    rc=$?
-    echo "[plugin-bootstrap-v2] doctor failed plugin=$plugin rc=$rc"
-    cat /tmp/plugin-doctor-$plugin.log 2>/dev/null || true
-    all_ok=0
-  else
-    cat /tmp/plugin-doctor-$plugin.log 2>/dev/null || true
   fi
 done
 
-echo "[plugin-bootstrap-v2] enabled plugins:"
-timeout 120 hermes plugins list --enabled --plain 2>&1 || true
+echo "[plugin-bootstrap-v2] enabled user plugins:"
+LIST_OUTPUT="$(timeout 120 hermes plugins list --enabled --user --plain 2>&1 || true)"
+printf '%s\n' "$LIST_OUTPUT"
 
-for plugin in $PLUGINS; do
-  if [ ! -d "/opt/data/plugins/$plugin" ]; then
+# Catalog name afterforge installs with plugin id agent-fix-lab.
+for installed_id in agent-fix-lab tool-slimmer toolaria tokenwatch; do
+  if ! printf '%s\n' "$LIST_OUTPUT" | grep -Fq "$installed_id"; then
+    echo "[plugin-bootstrap-v2] missing enabled plugin id=$installed_id"
+    all_ok=0
+    continue
+  fi
+
+  echo "[plugin-bootstrap-v2] doctor $installed_id"
+  if timeout 180 hermes plugins doctor "$installed_id" --ci >/tmp/plugin-doctor-$installed_id.log 2>&1; then
+    cat /tmp/plugin-doctor-$installed_id.log 2>/dev/null || true
+  else
+    cat /tmp/plugin-doctor-$installed_id.log 2>/dev/null || true
     all_ok=0
   fi
 done
