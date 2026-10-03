@@ -48,9 +48,14 @@ RUN python3 /tmp/patch-hermes-web-runtime.py \
     && rm -f /tmp/patch-hermes-web-runtime.py /tmp/patch-hermes-video-runtime.py /tmp/patch-dashboard-stability.py
 
 COPY railway-entrypoint.sh /usr/local/bin/hermes-railway-entrypoint
+COPY patch-entrypoint-stability.py /tmp/patch-entrypoint-stability.py
+RUN python3 /tmp/patch-entrypoint-stability.py \
+    && rm -f /tmp/patch-entrypoint-stability.py
+
 COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
 COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
 COPY cron-validation-run.sh /etc/services.d/hermes-cron-validation/run
+COPY cron-cleanup-run.sh /etc/services.d/hermes-cron-cleanup/run
 COPY bucket-backup.py /usr/local/bin/hermes-bucket-backup
 COPY bucket-backup-run.sh /etc/services.d/hermes-bucket-backup/run
 COPY plugin-bootstrap-run.sh /etc/services.d/hermes-plugin-bootstrap/run
@@ -60,6 +65,7 @@ RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /usr/local/bin/hermes-bucket-backup \
     /etc/services.d/hermes-runtime-smoke/run \
     /etc/services.d/hermes-cron-validation/run \
+    /etc/services.d/hermes-cron-cleanup/run \
     /etc/services.d/hermes-bucket-backup/run \
     /etc/services.d/hermes-plugin-bootstrap/run
 
