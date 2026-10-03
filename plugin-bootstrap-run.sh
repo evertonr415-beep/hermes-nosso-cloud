@@ -9,6 +9,45 @@ sleep 20
 
 echo "[plugin-stability] start home=$HERMES_HOME"
 
+# Determine the effective gateway UID/GID once. The production gateway currently
+# runs unprivileged; this also gives us a safe fallback if that changes later.
+GATEWAY_IDS="$(/opt/hermes/.venv/bin/python - <<'PY'
+from pathlib import Path
+import json, os
+uid, gid = 10000, 10000
+try:
+    data = json.loads(Path('/opt/data/gateway.pid').read_text(encoding='utf-8'))
+    pid = int(data.get('pid') or 0)
+    if pid:
+        for line in Path(f'/proc/{pid}/status').read_text(encoding='utf-8').splitlines():
+            if line.startswith('Uid:'):
+                uid = int(line.split()[2])
+            elif line.startswith('Gid:'):
+                gid = int(line.split()[2])
+except Exception:
+    pass
+print(f'{uid}:{gid}')
+PY
+)"
+GATEWAY_UID="${GATEWAY_IDS%:*}"
+GATEWAY_GID="${GATEWAY_IDS#*:}"
+echo "[plugin-stability] gateway-ids uid=$GATEWAY_UID gid=$GATEWAY_GID"
+
+# Keep the main settings file readable only by the Hermes runtime owner. This is
+# also a self-heal for a prior atomic replacement that inherited root ownership.
+if [ -f /opt/data/config.yaml ]; then
+  chown "$GATEWAY_UID:$GATEWAY_GID" /opt/data/config.yaml || true
+  chmod 600 /opt/data/config.yaml || true
+fi
+
+# Repair config-backup permissions before invoking any Hermes CLI command, since
+# plugin enable/disable can itself trigger config backup writes.
+mkdir -p /opt/data/backups/config
+chgrp "$GATEWAY_GID" /opt/data/backups 2>/dev/null || true
+chmod 750 /opt/data/backups 2>/dev/null || true
+chown "$GATEWAY_UID:$GATEWAY_GID" /opt/data/backups/config 2>/dev/null || true
+chmod 750 /opt/data/backups/config 2>/dev/null || true
+
 # tool-slimmer remains installed for validation, but disabled because it has
 # coincided with full-page reload loops on the current Models dashboard.
 timeout 30 hermes plugins disable tool-slimmer >/tmp/plugin-disable-tool-slimmer.log 2>&1 || true
@@ -32,46 +71,13 @@ else
   echo "[plugin-stability] curated install already complete; running health checks"
 fi
 
-# Repair config-backup permissions for the effective gateway user, then prove
-# that the same UID/GID can create and remove a file. Never make the directory
-# world-writable.
-/opt/hermes/.venv/bin/python - <<'PY'
+# Prove that the same UID/GID as the gateway can create and remove a backup
+# file. Never make the directory world-writable.
+/opt/hermes/.venv/bin/python - "$GATEWAY_UID" "$GATEWAY_GID" <<'PY'
 from pathlib import Path
-import json, os
-
-home = Path('/opt/data')
-pid_file = home / 'gateway.pid'
-backups = home / 'backups'
-config_backups = backups / 'config'
-
-uid = os.geteuid()
-gid = os.getegid()
-try:
-    data = json.loads(pid_file.read_text(encoding='utf-8'))
-    pid = int(data.get('pid') or 0)
-    if pid > 0:
-        status = Path(f'/proc/{pid}/status').read_text(encoding='utf-8')
-        for line in status.splitlines():
-            if line.startswith('Uid:'):
-                uid = int(line.split()[2])  # effective uid
-            elif line.startswith('Gid:'):
-                gid = int(line.split()[2])  # effective gid
-except Exception as exc:
-    print(f'[plugin-stability] gateway uid/gid probe fallback uid={uid} gid={gid} reason={type(exc).__name__}')
-
-backups.mkdir(parents=True, exist_ok=True)
-config_backups.mkdir(parents=True, exist_ok=True)
-
-# Parent only needs traversal for the gateway group. The config backup folder
-# is owned by the gateway process and remains owner/group-only.
-try:
-    os.chown(backups, -1, gid)
-except PermissionError:
-    pass
-os.chmod(backups, 0o750)
-os.chown(config_backups, uid, gid)
-os.chmod(config_backups, 0o750)
-
+import os, sys
+uid, gid = int(sys.argv[1]), int(sys.argv[2])
+config_backups = Path('/opt/data/backups/config')
 probe = config_backups / '.hermes-write-test'
 orig_euid, orig_egid = os.geteuid(), os.getegid()
 try:
@@ -97,11 +103,12 @@ fi
 # an explicit cron list is restrictive and could unintentionally remove tools.
 /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
-import json, yaml
+import json, os, yaml
 
 home = Path('/opt/data')
 config_path = home / 'config.yaml'
 try:
+    original = config_path.stat()
     cfg = yaml.safe_load(config_path.read_text(encoding='utf-8')) or {}
 except Exception as exc:
     print(f'[plugin-stability] toolaria-config-skip reason={type(exc).__name__}')
@@ -119,8 +126,8 @@ if isinstance(pts, dict):
 if changed:
     tmp = config_path.with_suffix('.yaml.plugin-stability.tmp')
     tmp.write_text(yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), encoding='utf-8')
-    os_mode = config_path.stat().st_mode & 0o777
-    tmp.chmod(os_mode or 0o600)
+    os.chown(tmp, original.st_uid, original.st_gid)
+    tmp.chmod(original.st_mode & 0o777 or 0o600)
     tmp.replace(config_path)
     print('[plugin-stability] toolaria-rescuer-added=' + ','.join(changed))
 else:
