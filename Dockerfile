@@ -5,8 +5,9 @@ USER root
 ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 ENV PATH="/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin"
 # The old entrypoint bootstrap targets six plugins and calls a dashboard helper
-# signature that is no longer valid on Hermes 0.21.x. The supervised
-# hermes-plugin-bootstrap service below owns curated plugin lifecycle instead.
+# signature that is no longer valid on Hermes 0.21.x. Curated plugins are
+# persisted on /opt/data; production no longer keeps a bootstrap supervisor
+# resident after startup.
 ENV HERMES_CURATED_PLUGINS_BOOTSTRAP=0
 
 # Add only Hermes Nosso skills that are not already bundled upstream.
@@ -28,7 +29,6 @@ RUN python3 /tmp/patch-router-fullstack.py \
     && rm -f /tmp/patch-router-fullstack.py
 
 # Lightweight S3 client for private Railway bucket backups.
-# git/curl/jq are explicit full-stack execution dependencies; node/npm are provided by the Hermes image.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,8 +37,6 @@ RUN test -x /opt/hermes/.venv/bin/hermes \
     && ln -sf /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes
 
 # Defensive compatibility layer for the current upstream dashboard.
-# It normalizes session metadata at the HTTP boundary and clears only stale
-# browser-side chat/session state once; it never mutates state.db.
 COPY patch-hermes-web-runtime.py /tmp/patch-hermes-web-runtime.py
 COPY patch-hermes-video-runtime.py /tmp/patch-hermes-video-runtime.py
 COPY patch-dashboard-stability.py /tmp/patch-dashboard-stability.py
@@ -52,27 +50,20 @@ COPY patch-entrypoint-stability.py /tmp/patch-entrypoint-stability.py
 RUN python3 /tmp/patch-entrypoint-stability.py \
     && rm -f /tmp/patch-entrypoint-stability.py
 
-# Repair private config/backup ownership before upstream stage2 and the gateway
-# read config.yaml. This runs as an s6 cont-init step before 01-hermes-setup.
+# Repair private config/backup ownership and prune safe runtime/log caches before startup.
 COPY hermes-storage-permissions.sh /etc/cont-init.d/00-hermes-storage-permissions
 
-COPY smoke-tests.sh /usr/local/bin/hermes-smoke-tests
-COPY runtime-smoke-run.sh /etc/services.d/hermes-runtime-smoke/run
-COPY cron-validation-run.sh /etc/services.d/hermes-cron-validation/run
-COPY cron-cleanup-run.sh /etc/services.d/hermes-cron-cleanup/run
+# Keep only the periodic bucket backup as a resident helper. Development-only
+# smoke, synthetic cron validation/cleanup, and plugin doctor supervisors are
+# intentionally omitted in production to keep the 1 GB Railway memory budget
+# available to the gateway and active agent request.
 COPY bucket-backup.py /usr/local/bin/hermes-bucket-backup
 COPY bucket-backup-run.sh /etc/services.d/hermes-bucket-backup/run
-COPY plugin-bootstrap-run.sh /etc/services.d/hermes-plugin-bootstrap/run
 
 RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
-    /usr/local/bin/hermes-smoke-tests \
     /usr/local/bin/hermes-bucket-backup \
     /etc/cont-init.d/00-hermes-storage-permissions \
-    /etc/services.d/hermes-runtime-smoke/run \
-    /etc/services.d/hermes-cron-validation/run \
-    /etc/services.d/hermes-cron-cleanup/run \
-    /etc/services.d/hermes-bucket-backup/run \
-    /etc/services.d/hermes-plugin-bootstrap/run
+    /etc/services.d/hermes-bucket-backup/run
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
 CMD ["sleep", "infinity"]
