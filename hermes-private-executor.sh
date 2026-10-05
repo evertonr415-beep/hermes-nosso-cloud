@@ -7,17 +7,24 @@ if [ -n "${VERCEL_OIDC_TOKEN:-}" ] || { [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VE
   exit 0
 fi
 
-if [ -z "${HERMES_EXECUTOR_SSH_PRIVATE_KEY:-}" ]; then
-  echo "[private-executor] SSH key not configured; keeping existing terminal backend"
+if [ -z "${HERMES_EXECUTOR_SSH_PRIVATE_KEY_B64:-}" ]; then
+  echo "[private-executor] encoded SSH key not configured; keeping existing terminal backend"
   exit 0
 fi
 
 key_dir=/opt/data/.ssh
 key_path="$key_dir/hermes-executor"
 install -d -m 700 -o hermes -g hermes "$key_dir"
-printf '%s\n' "$HERMES_EXECUTOR_SSH_PRIVATE_KEY" > "$key_path"
+printf '%s' "$HERMES_EXECUTOR_SSH_PRIVATE_KEY_B64" | base64 -d > "$key_path"
 chown hermes:hermes "$key_path"
 chmod 600 "$key_path"
+
+# Refuse to activate the backend if the decoded key is not a valid private key.
+if ! ssh-keygen -y -f "$key_path" >/dev/null 2>&1; then
+  echo "[private-executor] decoded SSH key is invalid; keeping existing terminal backend" >&2
+  rm -f "$key_path"
+  exit 0
+fi
 
 /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
