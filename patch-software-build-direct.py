@@ -17,11 +17,14 @@ if old not in s:
     raise SystemExit('call_upstream anchor not found')
 s=s.replace(old,new,1)
 
-old_payload='''            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}\n            if route=="matrix":\n'''
-new_payload='''            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}\n            if is_software_build_request(text):\n                # Isolate each build attempt so a cancelled/expired previous turn\n                # cannot hold the conversation session lock. The full user request\n                # is self-contained and remains the source of truth for this run.\n                payload["conversation"]=(conv or "web")+"-build-"+uuid.uuid4().hex[:10]\n                payload["_software_direct"]=True\n                print("[hermes-simple] software-build routing=direct-private isolated_session=true",flush=True)\n            if route=="matrix":\n'''
-if old_payload not in s:
-    raise SystemExit('payload anchor not found')
-s=s.replace(old_payload,new_payload,1)
+# The exact route block is changed by later patches (paid/Antigravity), so only
+# anchor on the stable payload assignment line and inject immediately after it.
+payload_line='            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}\n'
+inject='''            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}\n            if is_software_build_request(text):\n                # Isolate each build attempt so a cancelled/expired previous turn\n                # cannot hold the conversation session lock.\n                payload["conversation"]=(conv or "web")+"-build-"+uuid.uuid4().hex[:10]\n                payload["_software_direct"]=True\n                print("[hermes-simple] software-build routing=direct-private isolated_session=true",flush=True)\n'''
+if 'software-build routing=direct-private isolated_session=true' not in s:
+    if payload_line not in s:
+        raise SystemExit('payload assignment anchor not found')
+    s=s.replace(payload_line,inject,1)
 
 p.write_text(s)
 print('software build direct-routing patch applied')
