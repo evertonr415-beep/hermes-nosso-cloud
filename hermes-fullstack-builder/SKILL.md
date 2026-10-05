@@ -1,7 +1,7 @@
 ---
 name: hermes-fullstack-builder
 description: "Cria e evolui sites, sistemas e aplicações full-stack de ponta a ponta: arquitetura, código, banco, testes, Git e deploy quando houver credenciais disponíveis."
-version: 1.1.0
+version: 1.2.0
 platforms: [linux]
 metadata:
   hermes:
@@ -50,15 +50,20 @@ Levar o pedido do usuário até o artefato executável:
 
 Quando o backend de terminal for remoto/SSH, trate `/workspace` como a única raiz operacional do projeto.
 
-- Crie projetos novos em `/workspace/projects/<slug>`.
-- Faça TODA leitura, busca, criação e edição de arquivos do projeto remoto por comandos do `terminal` (`pwd`, `find`, `cat`, `sed`, Python/Node auxiliares, etc.).
-- Não use `read_file`, `search_files`, `write_file` ou caminhos locais como `/opt/data/projects/...` para arquivos que vivem no executor remoto; essas ferramentas enxergam o container principal, não o workspace SSH.
-- Não tente duplicar ou espelhar o projeto simultaneamente em `/opt/data/projects` e `/workspace/projects` durante a mesma execução.
-- Antes de cada lote de comandos, faça `cd /workspace/projects/<slug>` explicitamente quando necessário; não dependa do cwd local do processo controlador.
-- Prefira comandos pequenos e diretos. Evite wrappers, scripts temporários ou comandos que referenciem dezenas de arquivos só para inspecionar o projeto, pois isso aumenta o custo do lifecycle guard remoto.
+- Crie e mantenha projetos em `/workspace/projects/<slug>`.
+- Faça TODA leitura, busca, criação e edição de arquivos do projeto remoto exclusivamente por comandos do `terminal` (`pwd`, `find`, `cat`, `grep`, `sed`, `python`, `node`, heredoc curto etc.).
+- NUNCA use `read_file`, `search_files`, `write_file`, `patch` ou ferramentas equivalentes para arquivos em `/workspace`; essas ferramentas operam no container controlador, não no volume remoto.
+- NUNCA use `execute_code` em modo SSH. Para Python, Node ou scripts auxiliares, execute pelo `terminal` remoto dentro do projeto.
+- NUNCA troque o projeto remoto para `/opt/data/projects/...` durante a execução. `/opt/data` pertence ao controlador e não é o workspace do executor.
+- NUNCA tente criar `/opt/data` no executor remoto.
+- NUNCA use `skill_manage` para editar esta própria skill durante uma construção de projeto.
+- Não duplique nem espelhe o projeto simultaneamente em `/opt/data/projects` e `/workspace/projects`.
+- Antes de cada lote de comandos, faça `cd /workspace/projects/<slug>` explicitamente quando necessário; não dependa do cwd local do controlador.
+- Prefira comandos pequenos e diretos. Evite wrappers profundos, scripts temporários em cascata ou comandos que referenciem muitos arquivos de uma vez, pois isso aumenta o custo do lifecycle guard remoto.
 - Para procurar conteúdo, prefira `find`, `grep`, `git grep` e leitura direcionada em poucos arquivos.
-- Para alterações maiores, gere um único script curto dentro do próprio projeto remoto, execute-o e remova-o em seguida; evite cadeias profundas de scripts chamando outros scripts.
+- Para alterações maiores, gere um único script curto dentro do próprio projeto remoto, execute-o e remova-o em seguida.
 - Rode primeiro o teste mais específico que falhou; só depois rode a suíte completa e o build. Não repita a suíte inteira sem mudança relevante entre tentativas.
+- Se uma ferramenta local falhar porque um arquivo remoto não existe no controlador, não repita a ferramenta local: volte imediatamente ao `terminal` SSH.
 
 ## Escolha de stack
 
@@ -91,8 +96,8 @@ Não adicione banco, framework ou serviço externo sem necessidade.
 
 ## Fluxo para projeto existente
 
-1. `pwd`, `ls`, `git status`, detectar package manager e framework.
-2. Ler README, package scripts e arquivos de configuração relevantes.
+1. Em SSH: `cd /workspace/projects/<slug> && pwd && ls && git status` e detectar package manager/framework usando apenas `terminal`.
+2. Ler README, package scripts e configurações relevantes pelo `terminal` remoto.
 3. Rodar teste/build existente antes da mudança quando viável para obter baseline.
 4. Implementar a menor alteração suficiente.
 5. Rodar testes direcionados e depois build/lint relevante.
