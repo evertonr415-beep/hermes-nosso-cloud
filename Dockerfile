@@ -53,11 +53,11 @@ COPY patch-entrypoint-stability.py /tmp/patch-entrypoint-stability.py
 RUN python3 /tmp/patch-entrypoint-stability.py \
     && rm -f /tmp/patch-entrypoint-stability.py
 
-# Repair private config/backup ownership and configure Vercel Sandbox only when
-# its credentials are present. The guarded sandbox script otherwise leaves the
-# current terminal backend unchanged.
+# Repair private config/backup ownership. Prefer Vercel Sandbox when its
+# credentials exist; otherwise use the dedicated private Railway executor.
 COPY hermes-storage-permissions.sh /etc/cont-init.d/00-hermes-storage-permissions
 COPY hermes-vercel-sandbox.sh /etc/cont-init.d/01-hermes-vercel-sandbox
+COPY hermes-private-executor.sh /etc/cont-init.d/02-hermes-private-executor
 
 # Keep only the periodic bucket backup as a resident helper. Development-only
 # smoke, synthetic cron validation/cleanup, and plugin doctor supervisors are
@@ -70,6 +70,7 @@ RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /usr/local/bin/hermes-bucket-backup \
     /etc/cont-init.d/00-hermes-storage-permissions \
     /etc/cont-init.d/01-hermes-vercel-sandbox \
+    /etc/cont-init.d/02-hermes-private-executor \
     /etc/services.d/hermes-bucket-backup/run
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
