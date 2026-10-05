@@ -90,6 +90,11 @@ PY
   exit 0
 fi
 
+# The controller also validates TERMINAL_CWD locally before delegating to SSH.
+# Keep an inert local /workspace directory so that validation succeeds, while
+# project data continues to live only on the remote executor volume.
+install -d -m 755 -o root -g root /workspace
+
 # The supervised Hermes processes run as the hermes user.
 chown -R hermes:hermes "$key_dir"
 chmod 700 "$key_dir"
