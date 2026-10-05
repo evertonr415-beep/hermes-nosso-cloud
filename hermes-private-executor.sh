@@ -7,24 +7,88 @@ if [ -n "${VERCEL_OIDC_TOKEN:-}" ] || { [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VE
   exit 0
 fi
 
-if [ -z "${HERMES_EXECUTOR_SSH_PRIVATE_KEY_B64:-}" ]; then
-  echo "[private-executor] encoded SSH key not configured; keeping existing terminal backend"
+# Reuse a secret Railway already injects reliably into hermes-cloud. The key
+# itself is never stored in GitHub or passed as a separate environment value:
+# both services derive the same Ed25519 identity from this shared seed.
+if [ -z "${API_SERVER_KEY:-}" ]; then
+  echo "[private-executor] shared key seed unavailable; keeping existing terminal backend"
   exit 0
 fi
 
 key_dir=/opt/data/.ssh
 key_path="$key_dir/hermes-executor"
-install -d -m 700 -o hermes -g hermes "$key_dir"
-printf '%s' "$HERMES_EXECUTOR_SSH_PRIVATE_KEY_B64" | base64 -d > "$key_path"
-chown hermes:hermes "$key_path"
+known_hosts="$key_dir/known_hosts"
+install -d -m 700 "$key_dir"
+
+/usr/bin/python3 - <<'PY' > "$key_path"
+import hashlib, os
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives import serialization
+secret = os.environ['API_SERVER_KEY']
+seed = hashlib.sha256(('hermes-private-executor-v1:' + secret).encode('utf-8')).digest()
+key = Ed25519PrivateKey.from_private_bytes(seed)
+print(key.private_bytes(
+    serialization.Encoding.PEM,
+    serialization.PrivateFormat.OpenSSH,
+    serialization.NoEncryption(),
+).decode('ascii'), end='')
+PY
 chmod 600 "$key_path"
 
-# Refuse to activate the backend if the decoded key is not a valid private key.
 if ! ssh-keygen -y -f "$key_path" >/dev/null 2>&1; then
-  echo "[private-executor] decoded SSH key is invalid; keeping existing terminal backend" >&2
+  echo "[private-executor] derived SSH key failed validation; keeping local backend" >&2
   rm -f "$key_path"
   exit 0
 fi
+
+# Prove private DNS + TCP + SSH authentication before changing Hermes config.
+# A failed executor therefore cannot strand Hermes on an unreachable backend.
+probe_ok=0
+i=1
+while [ "$i" -le 8 ]; do
+  result="$(ssh -i "$key_path" -p 2222 \
+      -o BatchMode=yes \
+      -o ConnectTimeout=4 \
+      -o StrictHostKeyChecking=accept-new \
+      -o UserKnownHostsFile="$known_hosts" \
+      -o LogLevel=ERROR \
+      hermes@hermes-executor.railway.internal 'printf EXECUTOR_OK' 2>/dev/null || true)"
+  if [ "$result" = "EXECUTOR_OK" ]; then
+    probe_ok=1
+    break
+  fi
+  i=$((i + 1))
+  sleep 2
+done
+
+if [ "$probe_ok" != "1" ]; then
+  echo "[private-executor] SSH probe failed; forcing safe local backend" >&2
+  /opt/hermes/.venv/bin/python - <<'PY'
+from pathlib import Path
+import yaml
+p = Path('/opt/data/config.yaml')
+try:
+    data = yaml.safe_load(p.read_text(encoding='utf-8')) if p.exists() else {}
+except Exception:
+    data = {}
+if not isinstance(data, dict):
+    data = {}
+terminal = data.setdefault('terminal', {})
+if not isinstance(terminal, dict):
+    terminal = {}
+    data['terminal'] = terminal
+terminal['backend'] = 'local'
+p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding='utf-8')
+PY
+  rm -f "$key_path"
+  exit 0
+fi
+
+# The supervised Hermes processes run as the hermes user.
+chown -R hermes:hermes "$key_dir"
+chmod 700 "$key_dir"
+chmod 600 "$key_path"
+[ ! -f "$known_hosts" ] || chmod 600 "$known_hosts"
 
 /opt/hermes/.venv/bin/python - <<'PY'
 from pathlib import Path
@@ -51,5 +115,5 @@ terminal['ssh_key'] = '/opt/data/.ssh/hermes-executor'
 terminal['persistent_shell'] = True
 
 p.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding='utf-8')
-print('[private-executor] terminal backend configured: ssh')
+print('[private-executor] SSH probe OK; terminal backend configured: ssh')
 PY
