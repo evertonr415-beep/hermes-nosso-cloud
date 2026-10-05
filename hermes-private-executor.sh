@@ -7,13 +7,18 @@ if [ -n "${VERCEL_OIDC_TOKEN:-}" ] || { [ -n "${VERCEL_TOKEN:-}" ] && [ -n "${VE
   exit 0
 fi
 
-# Reuse a secret Railway already injects reliably into hermes-cloud. The key
-# itself is never stored in GitHub or passed as a separate environment value:
-# both services derive the same Ed25519 identity from this shared seed.
-if [ -z "${API_SERVER_KEY:-}" ]; then
+# Reuse the API server secret Hermes already persists on /opt/data. Railway's
+# service-reference variable can be absent during early init, while /opt/data/.env
+# is durable and is the value Hermes itself loads with override=True.
+seed="${API_SERVER_KEY:-}"
+if [ -z "$seed" ] && [ -f /opt/data/.env ]; then
+  seed="$(awk '/^API_SERVER_KEY=/{sub(/^API_SERVER_KEY=/, ""); print; exit}' /opt/data/.env 2>/dev/null || true)"
+fi
+if [ -z "$seed" ]; then
   echo "[private-executor] shared key seed unavailable; keeping existing terminal backend"
   exit 0
 fi
+export HERMES_EXECUTOR_SEED="$seed"
 
 key_dir=/opt/data/.ssh
 key_path="$key_dir/hermes-executor"
@@ -24,7 +29,7 @@ install -d -m 700 "$key_dir"
 import hashlib, os
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
-secret = os.environ['API_SERVER_KEY']
+secret = os.environ['HERMES_EXECUTOR_SEED']
 seed = hashlib.sha256(('hermes-private-executor-v1:' + secret).encode('utf-8')).digest()
 key = Ed25519PrivateKey.from_private_bytes(seed)
 print(key.private_bytes(
@@ -34,6 +39,7 @@ print(key.private_bytes(
 ).decode('ascii'), end='')
 PY
 chmod 600 "$key_path"
+unset HERMES_EXECUTOR_SEED seed
 
 if ! ssh-keygen -y -f "$key_path" >/dev/null 2>&1; then
   echo "[private-executor] derived SSH key failed validation; keeping local backend" >&2
