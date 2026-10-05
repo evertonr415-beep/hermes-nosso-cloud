@@ -32,12 +32,8 @@ RUN python3 /tmp/patch-router-fullstack.py \
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Official Hermes support for isolated Vercel Sandbox execution. The upstream
-# image stages uv in its managed tool store rather than exposing pip directly.
-RUN set -eu; \
-    UV_BIN="$(find /opt/hermes/tools -type f -name uv -perm -111 | head -n 1)"; \
-    test -n "$UV_BIN"; \
-    "$UV_BIN" pip install --python /opt/hermes/.venv/bin/python 'hermes-agent[vercel]'
+# Vercel Sandbox SDK is lazy-installed by Hermes itself through its managed
+# package manager when the vercel_sandbox backend is first used.
 
 # Make the Hermes CLI available from every runtime shell/exec context.
 RUN test -x /opt/hermes/.venv/bin/hermes \
