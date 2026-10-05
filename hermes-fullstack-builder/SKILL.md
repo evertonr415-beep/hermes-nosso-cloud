@@ -1,7 +1,7 @@
 ---
 name: hermes-fullstack-builder
 description: "Cria e evolui sites, sistemas e aplicações full-stack de ponta a ponta: arquitetura, código, banco, testes, Git e deploy quando houver credenciais disponíveis."
-version: 1.0.0
+version: 1.1.0
 platforms: [linux]
 metadata:
   hermes:
@@ -46,6 +46,20 @@ Levar o pedido do usuário até o artefato executável:
 - Nunca grave segredos em código, commit, log ou arquivo público. Use variáveis de ambiente.
 - Se um provider não estiver autenticado, deixe o projeto 100% deploy-ready, informe apenas a autenticação que falta e não fabrique conclusão.
 
+## Modo executor remoto (SSH)
+
+Quando o backend de terminal for remoto/SSH, trate `/workspace` como a única raiz operacional do projeto.
+
+- Crie projetos novos em `/workspace/projects/<slug>`.
+- Faça TODA leitura, busca, criação e edição de arquivos do projeto remoto por comandos do `terminal` (`pwd`, `find`, `cat`, `sed`, Python/Node auxiliares, etc.).
+- Não use `read_file`, `search_files`, `write_file` ou caminhos locais como `/opt/data/projects/...` para arquivos que vivem no executor remoto; essas ferramentas enxergam o container principal, não o workspace SSH.
+- Não tente duplicar ou espelhar o projeto simultaneamente em `/opt/data/projects` e `/workspace/projects` durante a mesma execução.
+- Antes de cada lote de comandos, faça `cd /workspace/projects/<slug>` explicitamente quando necessário; não dependa do cwd local do processo controlador.
+- Prefira comandos pequenos e diretos. Evite wrappers, scripts temporários ou comandos que referenciem dezenas de arquivos só para inspecionar o projeto, pois isso aumenta o custo do lifecycle guard remoto.
+- Para procurar conteúdo, prefira `find`, `grep`, `git grep` e leitura direcionada em poucos arquivos.
+- Para alterações maiores, gere um único script curto dentro do próprio projeto remoto, execute-o e remova-o em seguida; evite cadeias profundas de scripts chamando outros scripts.
+- Rode primeiro o teste mais específico que falhou; só depois rode a suíte completa e o build. Não repita a suíte inteira sem mudança relevante entre tentativas.
+
 ## Escolha de stack
 
 ### Site estático / landing page
@@ -64,7 +78,7 @@ Não adicione banco, framework ou serviço externo sem necessidade.
 
 ## Fluxo para projeto novo
 
-1. Criar pasta de trabalho em diretório persistente quando disponível (`/opt/data/projects/<slug>` no Hermes Cloud; caso contrário workspace atual).
+1. Se o terminal estiver em SSH, criar em `/workspace/projects/<slug>`; caso contrário usar diretório persistente local disponível (`/opt/data/projects/<slug>` no Hermes Cloud).
 2. Inicializar projeto com nome simples e estável.
 3. Criar README com comandos de desenvolvimento, build e deploy.
 4. Criar `.gitignore` e `.env.example` sem segredos.
