@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server ca-certificates git curl wget jq rsync zip unzip procps lsof \
-    build-essential python3 python3-pip python3-venv nodejs npm sudo \
+    build-essential python3 python3-pip python3-venv python3-cryptography nodejs npm sudo \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash -u 10001 hermes \
