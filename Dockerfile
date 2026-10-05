@@ -33,7 +33,7 @@ RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 instal
     && rm -rf /var/lib/apt/lists/*
 
 # Official Hermes support for isolated Vercel Sandbox execution.
-RUN /opt/hermes/.venv/bin/pip install --no-cache-dir 'hermes-agent[vercel]'
+RUN /opt/hermes/.venv/bin/python -m pip install --no-cache-dir 'hermes-agent[vercel]'
 
 # Make the Hermes CLI available from every runtime shell/exec context.
 RUN test -x /opt/hermes/.venv/bin/hermes \
