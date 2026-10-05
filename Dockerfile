@@ -28,8 +28,9 @@ COPY patch-router-fullstack.py /tmp/patch-router-fullstack.py
 RUN python3 /tmp/patch-router-fullstack.py \
     && rm -f /tmp/patch-router-fullstack.py
 
-# Lightweight S3 client for private Railway bucket backups.
-RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 git curl jq \
+# Lightweight S3 client for private Railway bucket backups plus the distro
+# cryptography library used only to derive the private executor SSH identity.
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Vercel Sandbox SDK is lazy-installed by Hermes itself through its managed
