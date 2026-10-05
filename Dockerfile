@@ -32,6 +32,9 @@ RUN python3 /tmp/patch-router-fullstack.py \
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
+# Official Hermes support for isolated Vercel Sandbox execution.
+RUN /opt/hermes/.venv/bin/pip install --no-cache-dir 'hermes-agent[vercel]'
+
 # Make the Hermes CLI available from every runtime shell/exec context.
 RUN test -x /opt/hermes/.venv/bin/hermes \
     && ln -sf /opt/hermes/.venv/bin/hermes /usr/local/bin/hermes
@@ -50,8 +53,11 @@ COPY patch-entrypoint-stability.py /tmp/patch-entrypoint-stability.py
 RUN python3 /tmp/patch-entrypoint-stability.py \
     && rm -f /tmp/patch-entrypoint-stability.py
 
-# Repair private config/backup ownership and prune safe runtime/log caches before startup.
+# Repair private config/backup ownership and configure Vercel Sandbox only when
+# its credentials are present. The guarded sandbox script otherwise leaves the
+# current terminal backend unchanged.
 COPY hermes-storage-permissions.sh /etc/cont-init.d/00-hermes-storage-permissions
+COPY hermes-vercel-sandbox.sh /etc/cont-init.d/01-hermes-vercel-sandbox
 
 # Keep only the periodic bucket backup as a resident helper. Development-only
 # smoke, synthetic cron validation/cleanup, and plugin doctor supervisors are
@@ -63,6 +69,7 @@ COPY bucket-backup-run.sh /etc/services.d/hermes-bucket-backup/run
 RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /usr/local/bin/hermes-bucket-backup \
     /etc/cont-init.d/00-hermes-storage-permissions \
+    /etc/cont-init.d/01-hermes-vercel-sandbox \
     /etc/services.d/hermes-bucket-backup/run
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
