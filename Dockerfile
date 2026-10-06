@@ -66,6 +66,14 @@ COPY patch-router-academic-security-tooling.py /tmp/patch-router-academic-securi
 RUN python3 /tmp/patch-router-academic-security-tooling.py \
     && rm -f /tmp/patch-router-academic-security-tooling.py
 
+# Low-level systems security, memory-failure analysis, kernel architecture and
+# EDR/XDR telemetry resilience for defensive research and secure development.
+RUN mkdir -p /opt/hermes/skills/security/low-level-memory-edr-resilience
+COPY low-level-memory-edr-resilience/SKILL.md /opt/hermes/skills/security/low-level-memory-edr-resilience/SKILL.md
+COPY patch-router-lowlevel-memory.py /tmp/patch-router-lowlevel-memory.py
+RUN python3 /tmp/patch-router-lowlevel-memory.py \
+    && rm -f /tmp/patch-router-lowlevel-memory.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
