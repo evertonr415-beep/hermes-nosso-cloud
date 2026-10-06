@@ -43,6 +43,14 @@ COPY patch-router-security.py /tmp/patch-router-security.py
 RUN python3 /tmp/patch-router-security.py \
     && rm -f /tmp/patch-router-security.py
 
+# Defensive security specialist: OWASP, applied cryptography, threat modeling,
+# secure coding, server/API hardening and authorized defensive verification.
+RUN mkdir -p /opt/hermes/skills/security/defensive-security-crypto-hardening
+COPY defensive-security-crypto-hardening/SKILL.md /opt/hermes/skills/security/defensive-security-crypto-hardening/SKILL.md
+COPY patch-router-defensive-security.py /tmp/patch-router-defensive-security.py
+RUN python3 /tmp/patch-router-defensive-security.py \
+    && rm -f /tmp/patch-router-defensive-security.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
