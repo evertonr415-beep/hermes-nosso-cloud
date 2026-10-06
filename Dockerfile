@@ -59,6 +59,13 @@ COPY patch-router-redteam.py /tmp/patch-router-redteam.py
 RUN python3 /tmp/patch-router-redteam.py \
     && rm -f /tmp/patch-router-redteam.py
 
+# Academic security-tool engineering for isolated labs and authorized testing.
+RUN mkdir -p /opt/hermes/skills/security/academic-security-tooling
+COPY academic-security-tooling/SKILL.md /opt/hermes/skills/security/academic-security-tooling/SKILL.md
+COPY patch-router-academic-security-tooling.py /tmp/patch-router-academic-security-tooling.py
+RUN python3 /tmp/patch-router-academic-security-tooling.py \
+    && rm -f /tmp/patch-router-academic-security-tooling.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
