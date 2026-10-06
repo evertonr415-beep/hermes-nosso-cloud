@@ -90,6 +90,14 @@ COPY patch-router-metaprogramming.py /tmp/patch-router-metaprogramming.py
 RUN python3 /tmp/patch-router-metaprogramming.py \
     && rm -f /tmp/patch-router-metaprogramming.py
 
+# Coherent multi-agent orchestrator for complex engineering projects: decomposes
+# work into specialist roles, cross-reviews results, validates, and synthesizes.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/multi-agent-coherent-orchestrator
+COPY multi-agent-coherent-orchestrator/SKILL.md /opt/hermes/skills/autonomous-ai-agents/multi-agent-coherent-orchestrator/SKILL.md
+COPY patch-router-multiagent.py /tmp/patch-router-multiagent.py
+RUN python3 /tmp/patch-router-multiagent.py \
+    && rm -f /tmp/patch-router-multiagent.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
