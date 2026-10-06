@@ -98,6 +98,14 @@ COPY patch-router-multiagent.py /tmp/patch-router-multiagent.py
 RUN python3 /tmp/patch-router-multiagent.py \
     && rm -f /tmp/patch-router-multiagent.py
 
+# Decentralized/P2P/edge compute orchestration, container portability,
+# model sharding, quantization and tensor compression with zero-cost-first design.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/decentralized-serverless-compute-orchestration
+COPY decentralized-serverless-compute-orchestration/SKILL.md /opt/hermes/skills/autonomous-ai-agents/decentralized-serverless-compute-orchestration/SKILL.md
+COPY patch-router-decentralized-compute.py /tmp/patch-router-decentralized-compute.py
+RUN python3 /tmp/patch-router-decentralized-compute.py \
+    && rm -f /tmp/patch-router-decentralized-compute.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
