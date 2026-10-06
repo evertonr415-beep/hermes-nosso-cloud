@@ -28,6 +28,13 @@ COPY patch-router-fullstack.py /tmp/patch-router-fullstack.py
 RUN python3 /tmp/patch-router-fullstack.py \
     && rm -f /tmp/patch-router-fullstack.py
 
+# Technical translator / prompt engineer for local latent-diffusion workflows.
+RUN mkdir -p /opt/hermes/skills/machine-learning/stable-diffusion-prompt-engineer
+COPY stable-diffusion-prompt-engineer/SKILL.md /opt/hermes/skills/machine-learning/stable-diffusion-prompt-engineer/SKILL.md
+COPY patch-router-diffusion.py /tmp/patch-router-diffusion.py
+RUN python3 /tmp/patch-router-diffusion.py \
+    && rm -f /tmp/patch-router-diffusion.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
