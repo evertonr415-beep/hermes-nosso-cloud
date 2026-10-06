@@ -35,6 +35,11 @@ COPY patch-router-diffusion.py /tmp/patch-router-diffusion.py
 RUN python3 /tmp/patch-router-diffusion.py \
     && rm -f /tmp/patch-router-diffusion.py
 
+# Sandboxed engineering skill for authorized reverse engineering, code audit,
+# defensive security diagnostics, automation and interface reconstruction.
+RUN mkdir -p /opt/hermes/skills/security/sandbox-security-reverse-engineering
+COPY sandbox-security-reverse-engineering/SKILL.md /opt/hermes/skills/security/sandbox-security-reverse-engineering/SKILL.md
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
