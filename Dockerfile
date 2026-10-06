@@ -114,6 +114,14 @@ COPY patch-router-local-distillation.py /tmp/patch-router-local-distillation.py
 RUN python3 /tmp/patch-router-local-distillation.py \
     && rm -f /tmp/patch-router-local-distillation.py
 
+# Cost-aware Mixture-of-Agents controller: local-first task decomposition,
+# dynamic per-subtask model routing, frontier escalation and failover.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/intelligent-infrastructure-dynamic-moa-orchestrator
+COPY intelligent-infrastructure-dynamic-moa-orchestrator/SKILL.md /opt/hermes/skills/autonomous-ai-agents/intelligent-infrastructure-dynamic-moa-orchestrator/SKILL.md
+COPY patch-router-dynamic-moa.py /tmp/patch-router-dynamic-moa.py
+RUN python3 /tmp/patch-router-dynamic-moa.py \
+    && rm -f /tmp/patch-router-dynamic-moa.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
