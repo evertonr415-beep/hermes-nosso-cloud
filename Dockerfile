@@ -39,6 +39,9 @@ RUN python3 /tmp/patch-router-diffusion.py \
 # defensive security diagnostics, automation and interface reconstruction.
 RUN mkdir -p /opt/hermes/skills/security/sandbox-security-reverse-engineering
 COPY sandbox-security-reverse-engineering/SKILL.md /opt/hermes/skills/security/sandbox-security-reverse-engineering/SKILL.md
+COPY patch-router-security.py /tmp/patch-router-security.py
+RUN python3 /tmp/patch-router-security.py \
+    && rm -f /tmp/patch-router-security.py
 
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
