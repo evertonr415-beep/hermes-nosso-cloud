@@ -51,6 +51,14 @@ COPY patch-router-defensive-security.py /tmp/patch-router-defensive-security.py
 RUN python3 /tmp/patch-router-defensive-security.py \
     && rm -f /tmp/patch-router-defensive-security.py
 
+# Academic red-team / CTF instructor for controlled adversary simulation,
+# authorized pentest methodology and lab-safe vulnerability exploitation.
+RUN mkdir -p /opt/hermes/skills/security/red-team-ctf-academic
+COPY red-team-ctf-academic/SKILL.md /opt/hermes/skills/security/red-team-ctf-academic/SKILL.md
+COPY patch-router-redteam.py /tmp/patch-router-redteam.py
+RUN python3 /tmp/patch-router-redteam.py \
+    && rm -f /tmp/patch-router-redteam.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
