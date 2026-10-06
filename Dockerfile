@@ -106,6 +106,14 @@ COPY patch-router-decentralized-compute.py /tmp/patch-router-decentralized-compu
 RUN python3 /tmp/patch-router-decentralized-compute.py \
     && rm -f /tmp/patch-router-decentralized-compute.py
 
+# Local/open-model quality optimizer: behavioral knowledge distillation,
+# prompt compilation, decomposition, critique and verification without paid APIs.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/knowledge-distillation-proprietary-model-mimicry
+COPY knowledge-distillation-proprietary-model-mimicry/SKILL.md /opt/hermes/skills/autonomous-ai-agents/knowledge-distillation-proprietary-model-mimicry/SKILL.md
+COPY patch-router-local-distillation.py /tmp/patch-router-local-distillation.py
+RUN python3 /tmp/patch-router-local-distillation.py \
+    && rm -f /tmp/patch-router-local-distillation.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
