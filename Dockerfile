@@ -82,6 +82,14 @@ COPY patch-router-ai-resilience.py /tmp/patch-router-ai-resilience.py
 RUN python3 /tmp/patch-router-ai-resilience.py \
     && rm -f /tmp/patch-router-ai-resilience.py
 
+# Self-reflective metaprogramming, recursive feedback, dynamic context
+# optimization, knowledge graphs and safe sandboxed evolution of local skills.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/evolutionary-metaprogramming-context-optimization
+COPY evolutionary-metaprogramming-context-optimization/SKILL.md /opt/hermes/skills/autonomous-ai-agents/evolutionary-metaprogramming-context-optimization/SKILL.md
+COPY patch-router-metaprogramming.py /tmp/patch-router-metaprogramming.py
+RUN python3 /tmp/patch-router-metaprogramming.py \
+    && rm -f /tmp/patch-router-metaprogramming.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
