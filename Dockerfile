@@ -74,6 +74,14 @@ COPY patch-router-lowlevel-memory.py /tmp/patch-router-lowlevel-memory.py
 RUN python3 /tmp/patch-router-lowlevel-memory.py \
     && rm -f /tmp/patch-router-lowlevel-memory.py
 
+# Advanced AI/ML security research, adversarial robustness, autonomous defense,
+# model-assisted reverse engineering and quantum-computing-informed resilience.
+RUN mkdir -p /opt/hermes/skills/security/ai-autonomous-vulnerability-resilience
+COPY ai-autonomous-vulnerability-resilience/SKILL.md /opt/hermes/skills/security/ai-autonomous-vulnerability-resilience/SKILL.md
+COPY patch-router-ai-resilience.py /tmp/patch-router-ai-resilience.py
+RUN python3 /tmp/patch-router-ai-resilience.py \
+    && rm -f /tmp/patch-router-ai-resilience.py
+
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
 RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
