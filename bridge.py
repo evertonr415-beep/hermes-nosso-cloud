@@ -73,7 +73,16 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self,fmt,*args): print("[hermes-bridge] "+(fmt%args),flush=True)
     def reply(self,status,body,ctype="application/json"):
         if isinstance(body,str): body=body.encode()
-        self.send_response(status); self.send_header("Content-Type",ctype); self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # If the client disconnected, do not attempt another 502 reply.
+            self.close_connection = True
+            print("[hermes-bridge] client disconnected before response delivery", flush=True)
     def authorized(self):
         presented=self.headers.get("Authorization","")
         allowed=[]
