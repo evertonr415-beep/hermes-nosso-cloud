@@ -318,6 +318,11 @@ PY
   ) &
 fi
 
+if [ -f /opt/hermes/hermes-nosso-bundle-count.txt ]; then
+  echo "[skills-audit] original-custom-bundle=$(cat /opt/hermes/hermes-nosso-bundle-count.txt)"
+fi
+echo "[skills-audit] installed-skill-files=$(find /opt/hermes/skills -type f -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')"
+
 echo "[storage-diag] filesystem:"
 df -h /opt/data 2>/dev/null || true
 echo "[storage-diag] top-level usage:"
