@@ -63,6 +63,29 @@ def generate_image(prompt, model="gpt-image-2", size="1024x1024"):
         raise last_http_error
     raise RuntimeError("image generation unavailable")
 
+def rewrite_model(body, model):
+    try:
+        payload=json.loads(body or b"{}")
+        payload["model"]=model
+        return json.dumps(payload,separators=(",",":")).encode()
+    except Exception:
+        return body
+
+def routed_models(body):
+    try:
+        requested=(json.loads(body or b"{}").get("model") or "").strip()
+    except Exception:
+        requested=""
+    # Keep the local Hermes UI/config compatible while routing legacy Sol
+    # requests to the current general-purpose Sol model.
+    if requested in ("gpt-5.6-sol","gpt-6.1-sol"):
+        return [("gpt-6-sol",rewrite_model(body,"gpt-6-sol")),("gpt-6-luna",rewrite_model(body,"gpt-6-luna"))]
+    if requested=="gpt-6-sol":
+        return [("gpt-6-sol",body),("gpt-6-luna",rewrite_model(body,"gpt-6-luna"))]
+    if requested=="gpt-6-luna":
+        return [("gpt-6-luna",body)]
+    return [(requested or "as-requested",body)]
+
 def direct_openai(path, body, timeout=240):
     if not OPENAI_KEY:
         raise RuntimeError("OPENAI_API_KEY missing")
@@ -210,12 +233,28 @@ class Handler(BaseHTTPRequestHandler):
                     stream_requested=bool(json.loads(body or b"{}").get("stream"))
                 except Exception:
                     stream_requested=False
-                if stream_requested:
-                    return self.direct_openai_stream(path,body or b"{}",timeout=300)
-                started=time.time()
-                status, raw, ctype = direct_openai(path, body or b"{}", timeout=300)
-                print(f"[text] direct-openai path={path} status={status} duration={time.time()-started:.2f}s",flush=True)
-                return self.reply(status,raw,ctype)
+                candidates=routed_models(body or b"{}")
+                last_error=None
+                for idx,(candidate,candidate_body) in enumerate(candidates):
+                    try:
+                        if idx:
+                            print(f"[text] fast-fallback model={candidate} path={path}",flush=True)
+                        if stream_requested:
+                            return self.direct_openai_stream(path,candidate_body,timeout=300)
+                        started=time.time()
+                        status, raw, ctype = direct_openai(path,candidate_body,timeout=300)
+                        print(f"[text] direct-openai path={path} model={candidate} status={status} duration={time.time()-started:.2f}s",flush=True)
+                        return self.reply(status,raw,ctype)
+                    except urllib.error.HTTPError as exc:
+                        last_error=exc
+                        raw=exc.read(8192)
+                        detail=raw.decode("utf-8","ignore").replace("\n"," ")[:280]
+                        print(f"[text] direct-openai-http model={candidate} status={exc.code} detail={detail}",flush=True)
+                        if exc.code in (400,401,403,404,429) and idx+1<len(candidates):
+                            continue
+                        return self.reply(exc.code,raw or json.dumps({"error":"direct_openai_http"}))
+                if last_error:
+                    return self.reply(last_error.code,b'{"error":"direct_openai_failed"}')
             req=urllib.request.Request(UPSTREAM+self.path,data=body,method=self.command,headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
             with urllib.request.urlopen(req,timeout=900) as res:
                 return self.reply(res.status,res.read(),res.headers.get("Content-Type","application/json"))
