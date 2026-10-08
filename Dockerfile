@@ -128,6 +128,9 @@ RUN python3 /tmp/patch-router-dynamic-moa.py \
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/auto-evolucao-recursiva
 COPY auto-evolucao-recursiva/SKILL.md /opt/hermes/skills/autonomous-ai-agents/auto-evolucao-recursiva/SKILL.md
 
+RUN mkdir -p /opt/hermes/skills/cloud/global-distributed-ai-cloud-architecture
+COPY global-distributed-ai-cloud-architecture/SKILL.md /opt/hermes/skills/cloud/global-distributed-ai-cloud-architecture/SKILL.md
+
 # Re-copy the original custom bundle only for an exact build-time count.
 COPY custom-skills.tar.gz.b64 /tmp/custom-skills-audit.b64
 RUN base64 -d /tmp/custom-skills-audit.b64 | tar -tzf - | grep -c 'SKILL.md' > /opt/hermes/hermes-nosso-bundle-count.txt \
@@ -149,6 +152,7 @@ RUN test -f /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/SKILL.md
     && test -f /opt/hermes/skills/autonomous-ai-agents/knowledge-distillation-proprietary-model-mimicry/SKILL.md \
     && test -f /opt/hermes/skills/autonomous-ai-agents/intelligent-infrastructure-dynamic-moa-orchestrator/SKILL.md \
     && test -f /opt/hermes/skills/autonomous-ai-agents/auto-evolucao-recursiva/SKILL.md \
+    && test -f /opt/hermes/skills/cloud/global-distributed-ai-cloud-architecture/SKILL.md \
     && find /opt/hermes/skills -type f -name SKILL.md | wc -l
 
 # Lightweight S3 client for private Railway bucket backups plus the distro
