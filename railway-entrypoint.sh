@@ -94,13 +94,16 @@ model = data.setdefault("model", {})
 if not isinstance(model, dict):
     model = {}
     data["model"] = model
-model["provider"] = "openai-api"
-model["default"] = "gpt-6-sol"
+# Prefer the model that has been answering successfully.
+model["provider"] = "openai-codex"
+model["default"] = "gpt-5.6-sol"
 model["persist_switch_by_default"] = True
-data["fallback_providers"] = [
-    {"provider": "openai-codex", "model": "gpt-6-sol"},
-    {"provider": "openai-codex", "model": "gpt-5.6-sol"},
-]
+data["fallback_providers"] = []
+agent_cfg = data.setdefault("agent", {})
+if not isinstance(agent_cfg, dict):
+    agent_cfg = {}
+    data["agent"] = agent_cfg
+agent_cfg["api_max_retries"] = 2
 providers = data.setdefault("providers", {})
 if not isinstance(providers, dict):
     providers = {}
