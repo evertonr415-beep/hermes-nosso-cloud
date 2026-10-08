@@ -227,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
         body=None
         if self.command=="POST": body=self.rfile.read(int(self.headers.get("Content-Length","0")))
         try:
-            if self.command=="POST" and path in ("/v1/chat/completions","/v1/responses") and DIRECT_OPENAI_TEXT and OPENAI_KEY:
+            if self.command=="POST" and path=="/v1/chat/completions" and DIRECT_OPENAI_TEXT and OPENAI_KEY:
                 stream_requested=False
                 try:
                     stream_requested=bool(json.loads(body or b"{}").get("stream"))
