@@ -78,7 +78,7 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
     <header class="topbar">
       <button class="menu" id="menu">☰</button>
       <select class="model" id="model">
-        <option value="auto">Automático · GPT-5.6 Sol</option>
+        <option value="auto">Automático · GPT-6</option>
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
       </select>
@@ -257,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Short/simple prompts use Luna for speed/cost; complex prompts keep Sol.
                 complex_words=("codigo","código","sistema","arquitetura","banco de dados","api","debug","erro","analise","análise","projeto","implemente","crie um sistema")
                 lowered=text.lower()
-                model="gpt-5.6-sol" if len(text)>500 or any(w in lowered for w in complex_words) else "gpt-6-luna"
+                model="gpt-6-sol" if len(text)>500 or any(w in lowered for w in complex_words) else "gpt-6-luna"
                 out,via=call_bridge_chat(messages,model)
             else:
                 payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
