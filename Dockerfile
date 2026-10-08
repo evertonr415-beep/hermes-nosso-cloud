@@ -130,7 +130,7 @@ COPY auto-evolucao-recursiva/SKILL.md /opt/hermes/skills/autonomous-ai-agents/au
 
 # Re-copy the original custom bundle only for an exact build-time count.
 COPY custom-skills.tar.gz.b64 /tmp/custom-skills-audit.b64
-RUN base64 -d /tmp/custom-skills-audit.b64 | tar -tzf - | grep -c 'SKILL.md' \
+RUN base64 -d /tmp/custom-skills-audit.b64 | tar -tzf - | grep -c 'SKILL.md' > /opt/hermes/hermes-nosso-bundle-count.txt \
     && rm -f /tmp/custom-skills-audit.b64
 
 # Verify every repository-defined Hermes Nosso skill is present in the image.
