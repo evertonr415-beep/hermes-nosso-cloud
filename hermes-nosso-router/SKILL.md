@@ -220,6 +220,15 @@ Do not route generic smart-home requests to OpenHue unless Hue is actually invol
 - LLM evaluation harness -> `evaluating-llms-harness`
 - Weights & Biases experiment tracking -> `weights-and-biases`
 
+## SELF-IMPROVEMENT / EXPERIMENTATION / OPTIMIZATION
+
+- Recursive self-improvement experiments, NAS, hyperparameter search, benchmark-driven variants and guarded promotion -> `auto-evolucao-recursiva`
+- Skill/code/context evolution and recursive feedback pipelines -> `evolutionary-metaprogramming-context-optimization`
+- Multi-model orchestration/cost-aware routing -> `intelligent-infrastructure-dynamic-moa-orchestrator`
+- Multi-agent decomposition and cross-review -> `multi-agent-coherent-orchestrator`
+
+Keep production changes gated by tests, explicit promotion and rollback. Run autonomous experimentation only in controlled/sandboxed environments.
+
 ## PRESENTATIONS / CAMPAIGN PRESENTATION WORK
 
 - PowerPoint artifact -> `powerpoint`
