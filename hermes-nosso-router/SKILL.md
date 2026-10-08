@@ -212,6 +212,14 @@ If a connected native email provider/tool exists and is more appropriate, use it
 
 Do not route generic smart-home requests to OpenHue unless Hue is actually involved.
 
+## CLOUD / MULTI-REGION / GLOBAL AI INFRASTRUCTURE
+
+Use for global AI platforms, multi-cloud architecture, edge computing, distributed GPU/TPU inference, global routing, vector memory, AI security, FinOps and Terraform cloud blueprints.
+
+- Global distributed AI architecture, AWS/GCP/Azure multi-cloud, edge, Anycast/DNS/CDN, Kubernetes GPU/TPU, confidential computing, global vector memory, AI guardrails, FinOps circuit breakers and secure Terraform -> `global-distributed-ai-cloud-architecture`
+- If the user also asks for a concrete software implementation, add at most one implementation skill.
+- If the task is primarily Kubernetes troubleshooting rather than architecture, prefer a narrower infrastructure/debugging skill if installed.
+
 ## ML / LOCAL MODELS / INFERENCE / EVALUATION
 
 - Hugging Face workflows -> `huggingface-hub`
