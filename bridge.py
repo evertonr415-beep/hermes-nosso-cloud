@@ -105,6 +105,40 @@ class Handler(BaseHTTPRequestHandler):
             # If the client disconnected, do not attempt another 502 reply.
             self.close_connection = True
             print("[hermes-bridge] client disconnected before response delivery", flush=True)
+    def direct_openai_stream(self,path,body,timeout=300):
+        req=urllib.request.Request(
+            OPENAI_BASE+path,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization":"Bearer "+OPENAI_KEY,
+                "Content-Type":"application/json",
+                "Accept":"text/event-stream",
+            },
+        )
+        started=time.time()
+        with urllib.request.urlopen(req,timeout=timeout) as res:
+            ctype=res.headers.get("Content-Type","text/event-stream")
+            self.send_response(res.status)
+            self.send_header("Content-Type",ctype)
+            self.send_header("Cache-Control","no-cache")
+            self.send_header("Connection","close")
+            self.end_headers()
+            self.close_connection=True
+            first=True
+            try:
+                for chunk in res:
+                    if not chunk:
+                        continue
+                    if first:
+                        print(f"[text] direct-openai-stream path={path} ttfb={time.time()-started:.2f}s",flush=True)
+                        first=False
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            except (BrokenPipeError,ConnectionResetError):
+                print("[text] streaming client disconnected",flush=True)
+            print(f"[text] direct-openai-stream path={path} duration={time.time()-started:.2f}s",flush=True)
+
     def authorized(self):
         presented=self.headers.get("Authorization","")
         allowed=[]
@@ -171,6 +205,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.command=="POST": body=self.rfile.read(int(self.headers.get("Content-Length","0")))
         try:
             if self.command=="POST" and path in ("/v1/chat/completions","/v1/responses") and DIRECT_OPENAI_TEXT and OPENAI_KEY:
+                stream_requested=False
+                try:
+                    stream_requested=bool(json.loads(body or b"{}").get("stream"))
+                except Exception:
+                    stream_requested=False
+                if stream_requested:
+                    return self.direct_openai_stream(path,body or b"{}",timeout=300)
                 started=time.time()
                 status, raw, ctype = direct_openai(path, body or b"{}", timeout=300)
                 print(f"[text] direct-openai path={path} status={status} duration={time.time()-started:.2f}s",flush=True)
