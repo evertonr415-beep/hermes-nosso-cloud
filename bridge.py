@@ -7,6 +7,8 @@ HERMES_KEY=os.getenv("API_SERVER_KEY","")
 BRIDGE_KEY=os.getenv("HERMES_BRIDGE_KEY","")
 SIMPLE_BRIDGE_KEY=os.getenv("HERMES_SIMPLE_BRIDGE_KEY","")
 OPENAI_KEY=os.getenv("OPENAI_API_KEY","")
+OPENAI_BASE=os.getenv("OPENAI_BASE_URL","https://api.openai.com").rstrip("/")
+DIRECT_OPENAI_TEXT=os.getenv("HERMES_DIRECT_OPENAI_TEXT","1").strip().lower() not in ("0","false","no","off")
 IMAGE_STORE={}
 IMAGE_LOCK=threading.Lock()
 IMAGE_TTL=60*60
@@ -61,11 +63,31 @@ def generate_image(prompt, model="gpt-image-2", size="1024x1024"):
         raise last_http_error
     raise RuntimeError("image generation unavailable")
 
+def direct_openai(path, body, timeout=240):
+    if not OPENAI_KEY:
+        raise RuntimeError("OPENAI_API_KEY missing")
+    req=urllib.request.Request(
+        OPENAI_BASE+path,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization":"Bearer "+OPENAI_KEY,
+            "Content-Type":"application/json",
+            "Accept":"application/json",
+        },
+    )
+    with urllib.request.urlopen(req,timeout=timeout) as res:
+        return res.status, res.read(), res.headers.get("Content-Type","application/json")
+
 def hermes_chat(prompt):
     payload=json.dumps({"model":"gpt-5.6-sol","messages":[{"role":"user","content":prompt}],"stream":False}).encode()
-    req=urllib.request.Request(UPSTREAM+"/v1/chat/completions",data=payload,method="POST",headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
-    with urllib.request.urlopen(req,timeout=75) as res:
-        data=json.load(res)
+    if DIRECT_OPENAI_TEXT and OPENAI_KEY:
+        status, raw, _ = direct_openai("/v1/chat/completions", payload, timeout=180)
+        data=json.loads(raw)
+    else:
+        req=urllib.request.Request(UPSTREAM+"/v1/chat/completions",data=payload,method="POST",headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
+        with urllib.request.urlopen(req,timeout=180) as res:
+            data=json.load(res)
     return data["choices"][0]["message"]["content"]
 
 class Handler(BaseHTTPRequestHandler):
@@ -147,11 +169,22 @@ class Handler(BaseHTTPRequestHandler):
         if path not in (GET_PATHS if self.command=="GET" else POST_PATHS): return self.reply(404,b'{"error":"not_found"}')
         body=None
         if self.command=="POST": body=self.rfile.read(int(self.headers.get("Content-Length","0")))
-        req=urllib.request.Request(UPSTREAM+self.path,data=body,method=self.command,headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
         try:
-            with urllib.request.urlopen(req,timeout=900) as res: self.reply(res.status,res.read(),res.headers.get("Content-Type","application/json"))
-        except urllib.error.HTTPError as exc: self.reply(exc.code,exc.read())
-        except Exception as exc: self.reply(502,json.dumps({"error":"upstream_unavailable","type":type(exc).__name__}))
+            if self.command=="POST" and path in ("/v1/chat/completions","/v1/responses") and DIRECT_OPENAI_TEXT and OPENAI_KEY:
+                started=time.time()
+                status, raw, ctype = direct_openai(path, body or b"{}", timeout=300)
+                print(f"[text] direct-openai path={path} status={status} duration={time.time()-started:.2f}s",flush=True)
+                return self.reply(status,raw,ctype)
+            req=urllib.request.Request(UPSTREAM+self.path,data=body,method=self.command,headers={"Authorization":"Bearer "+HERMES_KEY,"Content-Type":"application/json"})
+            with urllib.request.urlopen(req,timeout=900) as res:
+                return self.reply(res.status,res.read(),res.headers.get("Content-Type","application/json"))
+        except urllib.error.HTTPError as exc:
+            raw=exc.read()
+            print(f"[text] upstream-http path={path} status={exc.code}",flush=True)
+            return self.reply(exc.code,raw)
+        except Exception as exc:
+            print(f"[text] upstream-error path={path} type={type(exc).__name__}",flush=True)
+            return self.reply(502,json.dumps({"error":"upstream_unavailable","type":type(exc).__name__}))
     do_GET=proxy
     do_POST=proxy
 
