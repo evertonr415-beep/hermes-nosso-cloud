@@ -79,8 +79,9 @@ if command -v hermes >/dev/null 2>&1; then
   echo "[profile-recovery] active profile requested: default"
 fi
 
-if [ -x /opt/hermes/.venv/bin/python ]; then
-  /opt/hermes/.venv/bin/python - <<'PY'
+# This block needs Debian's python3-yaml, not the sealed Hermes venv.
+if [ -x /usr/bin/python3 ]; then
+  /usr/bin/python3 - <<'PY'
 from pathlib import Path
 import yaml
 p = Path("/opt/data/config.yaml")
