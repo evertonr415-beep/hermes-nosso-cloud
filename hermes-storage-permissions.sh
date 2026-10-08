@@ -32,5 +32,11 @@ chmod 750 /opt/data/backups 2>/dev/null || true
 chown "$RUNTIME_UID:$RUNTIME_GID" /opt/data/backups/config
 chmod 750 /opt/data/backups/config
 
+# Installer lock files on the persistent volume must be writable by the
+# unprivileged Hermes runtime, or its supervised gateway continually restarts.
+if [ -d /opt/data/installs ]; then
+  chown -R "$RUNTIME_UID:$RUNTIME_GID" /opt/data/installs 2>/dev/null || true
+fi
+
 echo "[storage-permissions] safe cleanup complete; config/backups ready uid=$RUNTIME_UID gid=$RUNTIME_GID"
 df -h /opt/data 2>/dev/null || true
