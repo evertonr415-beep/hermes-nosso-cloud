@@ -124,7 +124,7 @@ RUN python3 /tmp/patch-router-dynamic-moa.py \
 
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
-RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography git curl jq \
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography python3-yaml git curl jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Vercel Sandbox SDK is lazy-installed by Hermes itself through its managed
