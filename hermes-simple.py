@@ -166,7 +166,7 @@ def call_upstream(payload):
         "Accept": "application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=900) as res:
+        with urllib.request.urlopen(req, timeout=180) as res:
             return json.load(res), "bridge"
     except urllib.error.HTTPError as e:
         raw = e.read(8192)
@@ -224,6 +224,8 @@ class Handler(BaseHTTPRequestHandler):
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
+            if route=="auto":
+                payload.update({"model":"gpt-5.6-sol"})
             if route=="matrix":
                 payload.update({"provider":"matrix","model":"claude-opus-5"})
             elif route=="local":
