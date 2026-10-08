@@ -212,6 +212,13 @@ If a connected native email provider/tool exists and is more appropriate, use it
 
 Do not route generic smart-home requests to OpenHue unless Hue is actually involved.
 
+## GLOBAL DECENTRALIZED INFERENCE / DePIN ROUTING
+
+- Multi-provider/global inference routing across authorized open-model endpoints, self-hosted vLLM/Ollama, Hugging Face, Together, Akash or equivalent configured backends -> `global-decentralized-inference-orchestrator`
+- Never auto-provision paid/third-party resources without explicit owner authorization.
+- Prefer healthy authorized backends using latency, privacy, cost, capacity and quality scoring.
+- Use one bounded fallback; avoid retry storms.
+
 ## CLOUD / MULTI-REGION / GLOBAL AI INFRASTRUCTURE
 
 Use for global AI platforms, multi-cloud architecture, edge computing, distributed GPU/TPU inference, global routing, vector memory, AI security, FinOps and Terraform cloud blueprints.
