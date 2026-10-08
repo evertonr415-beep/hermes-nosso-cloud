@@ -125,7 +125,8 @@ async function submit(){
  input.value=''; input.style.height='auto'; send.disabled=true; statusEl.textContent='pensando…'; save(); render();
  const holder=document.createElement('div');holder.className='msg assistant';holder.innerHTML='<div class="bubble"><div class="role">Hermes</div><div class="typing"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div></div>';chat.appendChild(holder);$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight;
  try{
-  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,route:$('#model').value})});
+  const history=c.messages.slice(-20).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.text||''}));
+  const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({conversation:'web-'+c.id,input:text,messages:history,route:$('#model').value})});
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
@@ -155,22 +156,42 @@ def auth_ok(headers):
     except Exception:
         return False
 
-def call_upstream(payload):
-    """Use the isolated bridge as the single stable chat path."""
+def call_bridge_chat(messages, model):
+    """Fast default path: bridge -> OpenAI direct, without hermes-cloud/Matrix."""
     if not BRIDGE_KEY:
         raise RuntimeError("Bridge Hermes não configurado")
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(BRIDGE_UPSTREAM + "/v1/responses", data=body, method="POST", headers={
-        "Authorization": "Bearer " + BRIDGE_KEY,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
+    payload={"model":model,"messages":messages,"stream":False}
+    body=json.dumps(payload).encode("utf-8")
+    req=urllib.request.Request(BRIDGE_UPSTREAM + "/v1/chat/completions",data=body,method="POST",headers={
+        "Authorization":"Bearer "+BRIDGE_KEY,
+        "Content-Type":"application/json",
+        "Accept":"application/json",
     })
     try:
-        with urllib.request.urlopen(req, timeout=180) as res:
-            return json.load(res), "bridge"
+        with urllib.request.urlopen(req,timeout=300) as res:
+            data=json.load(res)
+        text=((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        return text.strip(), "bridge-direct"
     except urllib.error.HTTPError as e:
-        raw = e.read(8192)
-        raise RuntimeError(f"bridge HTTP {e.code}: " + raw.decode("utf-8","ignore")[:400]) from e
+        raw=e.read(8192)
+        raise RuntimeError(f"bridge HTTP {e.code}: "+raw.decode("utf-8","ignore")[:400]) from e
+
+def call_cloud_response(payload):
+    """Advanced/legacy routes still use the full Hermes cloud runtime."""
+    if not BRIDGE_KEY:
+        raise RuntimeError("Bridge Hermes não configurado")
+    body=json.dumps(payload).encode("utf-8")
+    req=urllib.request.Request(BRIDGE_UPSTREAM + "/v1/responses",data=body,method="POST",headers={
+        "Authorization":"Bearer "+BRIDGE_KEY,
+        "Content-Type":"application/json",
+        "Accept":"application/json",
+    })
+    try:
+        with urllib.request.urlopen(req,timeout=300) as res:
+            return json.load(res), "bridge-cloud"
+    except urllib.error.HTTPError as e:
+        raw=e.read(8192)
+        raise RuntimeError(f"bridge HTTP {e.code}: "+raw.decode("utf-8","ignore")[:400]) from e
 
 def response_text(data):
     parts=[]
@@ -181,7 +202,7 @@ def response_text(data):
                     parts.append(c["text"])
     if parts:
         return "\n".join(parts).strip()
-    if isinstance(data.get("output_text"), str):
+    if isinstance(data.get("output_text"),str):
         return data["output_text"].strip()
     return ""
 
@@ -223,15 +244,29 @@ class Handler(BaseHTTPRequestHandler):
             route=(msg.get("route") or "auto").strip()
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
-            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="auto":
-                payload.update({"model":"gpt-5.6-sol"})
-            if route=="matrix":
-                payload.update({"provider":"matrix","model":"claude-opus-5"})
-            elif route=="local":
-                payload.update({"provider":"hermes-local","model":"hermes-agent"})
-            data, via=call_upstream(payload)
-            out=response_text(data)
+                raw_messages=msg.get("messages") or []
+                messages=[]
+                for item in raw_messages[-20:]:
+                    role=item.get("role")
+                    content=item.get("content")
+                    if role in ("user","assistant") and isinstance(content,str) and content.strip():
+                        messages.append({"role":role,"content":content})
+                if not messages or messages[-1].get("content")!=text:
+                    messages.append({"role":"user","content":text})
+                # Short/simple prompts use Luna for speed/cost; complex prompts keep Sol.
+                complex_words=("codigo","código","sistema","arquitetura","banco de dados","api","debug","erro","analise","análise","projeto","implemente","crie um sistema")
+                lowered=text.lower()
+                model="gpt-5.6-sol" if len(text)>500 or any(w in lowered for w in complex_words) else "gpt-6-luna"
+                out,via=call_bridge_chat(messages,model)
+            else:
+                payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
+                if route=="matrix":
+                    payload.update({"provider":"matrix","model":"claude-opus-5"})
+                elif route=="local":
+                    payload.update({"provider":"hermes-local","model":"hermes-agent"})
+                data,via=call_cloud_response(payload)
+                out=response_text(data)
             if not out:
                 out="O Hermes concluiu a execução, mas não retornou texto."
             return self.sendb(200,json.dumps({"text":out,"via":via},ensure_ascii=False))
