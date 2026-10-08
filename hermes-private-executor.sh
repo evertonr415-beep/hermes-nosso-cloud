@@ -69,7 +69,7 @@ done
 
 if [ "$probe_ok" != "1" ]; then
   echo "[private-executor] SSH probe failed; forcing safe local backend" >&2
-  /opt/hermes/.venv/bin/python - <<'PY'
+  /usr/bin/python3 - <<'PY'
 from pathlib import Path
 import yaml
 p = Path('/opt/data/config.yaml')
@@ -101,7 +101,7 @@ chmod 700 "$key_dir"
 chmod 600 "$key_path"
 [ ! -f "$known_hosts" ] || chmod 600 "$known_hosts"
 
-/opt/hermes/.venv/bin/python - <<'PY'
+/usr/bin/python3 - <<'PY'
 from pathlib import Path
 import yaml
 
