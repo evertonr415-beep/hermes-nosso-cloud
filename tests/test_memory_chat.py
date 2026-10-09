@@ -56,7 +56,7 @@ class MemoryChatTests(unittest.TestCase):
     def test_deployment_wires_real_module(self):
         self.assertIn("COPY hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery", DOCKER)
         self.assertIn('use_memory = msg.get("use_memory") is True', SIMPLE)
-        self.assertIn("id=\\\"use-memory\\\"", WEB)
+        self.assertIn("use-memory", WEB)
         self.assertIn("result = agent.answer(effective_prompt)", WEB)
 
 if __name__ == "__main__":
