@@ -16,7 +16,7 @@ from http.server import ThreadingHTTPServer
 SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
-MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
+MEMORY_PATH = os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py") if os.path.exists(os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py")) else "/usr/local/bin/hermes-memory-recovery"
 
 def load_module(name, path):
     loader = SourceFileLoader(name, path)
