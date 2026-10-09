@@ -7,6 +7,8 @@ on:
       - ".github/workflows/hermes-router-tests.yml"
       - "hermes-global-model-router.py"
       - "tests/test_vector_rest.py"
+      - "hermes-groq-catalog-monitor.py"
+      - "tests/test_groq_catalog_monitor.py"
       - "hermes-render-light-web.py"
       - "hermes-simple.py"
       - "tests/test_hf_router_retry.py"
@@ -48,6 +50,8 @@ jobs:
 
       - name: Install offline cryptography dependency
         run: python -m pip install 'cryptography>=42,<47'
+      - name: Verify Groq model catalogue monitor
+        run: python -m unittest discover -s tests -p test_groq_catalog_monitor.py -v
       - name: Check vector REST authorization offline
         run: python -m unittest discover -s tests -p test_vector_rest.py -v
       - name: Test encrypted memory sync (offline)
