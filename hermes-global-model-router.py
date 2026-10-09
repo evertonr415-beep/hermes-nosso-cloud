@@ -98,7 +98,7 @@ def compact_retrieved_memory(query, passages, *, max_items=5, max_chars=1800):
         return []
     max_items = min(5, max(1, int(max_items)))
     max_chars = min(2400, max(128, int(max_chars)))
-    tokens = set(re.findall(r"[^\\W_]{3,}", query.casefold()))
+    tokens = set(re.findall(r"[^\W_]{3,}", query.casefold()))
     seen = set()
     ranked = []
     for passage in passages[:64]:
@@ -108,13 +108,13 @@ def compact_retrieved_memory(query, passages, *, max_items=5, max_chars=1800):
             clean = " ".join(line.split())
             if not 8 <= len(clean) <= 1000:
                 continue
-            if re.search(r"(?i)(?:api[_-]?key|password|token|authorization|bearer)\\s*[:=]", clean):
+            if re.search(r"(?i)(?:api[_-]?key|password|token|authorization|bearer)\s*[:=]", clean):
                 continue
-            normalized = re.sub(r"\\W+", " ", clean.casefold()).strip()
+            normalized = re.sub(r"\W+", " ", clean.casefold()).strip()
             if not normalized or normalized in seen:
                 continue
             seen.add(normalized)
-            matches = tokens.intersection(re.findall(r"[^\\W_]{3,}", normalized))
+            matches = tokens.intersection(re.findall(r"[^\W_]{3,}", normalized))
             score = len(matches) / max(1, len(tokens))
             if score > 0:
                 ranked.append((score, clean))
