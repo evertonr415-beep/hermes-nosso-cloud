@@ -13,6 +13,7 @@ on:
       - "tests/test_groq_free_router.py"
       - "hermes-light-agent.py"
       - "tests/test_light_agent.py"
+      - "tests/test_advanced_ui.py"
       - "hermes-simple.py"
       - "Dockerfile"
   workflow_dispatch:
@@ -32,7 +33,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py
       - name: Run offline inference-router regression tests
         run: |
           python -m unittest discover -s tests -p 'test_*router*.py' -v
@@ -40,3 +41,6 @@ jobs:
       - name: Test read-only advanced agent
         run: |
           python -m unittest discover -s tests -p 'test_light_agent.py' -v
+      - name: Check Advanced sidebar and browser JavaScript
+        run: |
+          python -m unittest discover -s tests -p 'test_advanced_ui.py' -v
