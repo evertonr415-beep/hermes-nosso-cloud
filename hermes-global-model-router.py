@@ -117,14 +117,32 @@ def configured():
         if not parsed.path.endswith("/chat/completions"): continue
         active.append(p)
     # Third-party anonymous API. Never forward HF credentials; public prompts only.
-    mode = os.getenv("HERMES_INFERENCE_MODE", "auto").strip().lower()
+    mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
     if os.getenv("HERMES_PUBLIC_ANONYMOUS_ENABLED", "0") == "1":
         active.append({"id": "anonymous-public",
             "url": "https://vireonix.ai/v1/chat/completions",
             "model": "auto", "priority": -10 if mode == "anonymous" else 3,
             "public_only": True, "keyless": True, "timeout": 20, "max_tokens": 512})
+    # Official GroqCloud Free tier; authentication is required, no billing enabled.
+    # Neither HF_TOKEN nor arbitrary public endpoints are used in groq mode.
+    if mode in ("groq", "auto"):
+        groq_key = os.getenv("GROQ_API_KEY", "").strip()
+        if re.fullmatch(r"gsk_[A-Za-z0-9_-]{20,}", groq_key):
+            allowed_models = {"qwen/qwen3.8-27b", "openai/gpt-oss-20b"}
+            model = os.getenv("HERMES_GROQ_MODEL", "qwen/qwen3.8-27b").strip()
+            if model not in allowed_models:
+                model = "qwen/qwen3.8-27b"
+            active.append({
+                "id": "groq-free",
+                "url": "https://api.groq.com/openai/v1/chat/completions",
+                "model": model,
+                "priority": -20 if mode == "groq" else 2,
+                "api_key_env": "GROQ_API_KEY",
+                "max_tokens": 512,
+                "timeout": 20,
+            })
     hf_token = os.getenv("HF_TOKEN", "").strip()
-    if mode != "anonymous" and re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
+    if mode in ("auto", "huggingface") and re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
         # Official Hugging Face Inference Providers; HF_TOKEN must be set as a Space Secret.
         supported_models = set(HF_MODEL_PREFERENCES)
         model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen3-4B-Instruct-2507").strip()
@@ -200,7 +218,7 @@ def run(payload):
                 str(p["url"]), data=json.dumps(req_body).encode(),
                 headers=headers, method="POST",
             )
-            max_attempts = 2 if (is_hf or p["id"] == "anonymous-public") else 1
+            max_attempts = 2 if (is_hf or p["id"] in ("anonymous-public", "groq-free")) else 1
             for attempt in range(1, max_attempts + 1):
                 start = time.monotonic()
                 try:
@@ -280,8 +298,10 @@ def run(payload):
 if __name__=="__main__":
     try:
         if "--probe" in sys.argv:
-            provider = ("anonymous-public" if os.getenv("HERMES_INFERENCE_MODE", "auto") == "anonymous"
-                        else "huggingface-official")
+            check_mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
+            provider = ("groq-free" if check_mode == "groq" else
+                        "anonymous-public" if check_mode == "anonymous" else
+                        "huggingface-official")
             test=run({"prompt":"Diga OK.", "sensitivity":"public",
                       "provider_id":provider, "max_tokens":16})
             result={"ok":bool(test.get("ok")),"provider":test.get("provider"),

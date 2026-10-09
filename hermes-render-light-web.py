@@ -30,11 +30,11 @@ router = load_module("hermes_render_model_router", ROUTER_PATH)
 # The legacy UI displayed Railway-specific model names and a Railway link.
 # In lightweight mode all chat prompts use ONLY this deployment's global router.
 simple.HTML = (simple.HTML
-    .replace("Automático · GPT-5.6 Sol", "IA pública anônima · Auto")
+    .replace("Automático · GPT-5.6 Sol", "Groq grátis · Qwen 27B")
     .replace('<option value="matrix">Matrix</option>', "")
     .replace('<option value="local">Hermes Local</option>', "")
     .replace("Hermes pode usar ferramentas, memória e skills em segundo plano.",
-             "Modo público: mensagens são enviadas a serviço terceiro. Não envie dados pessoais nem segredos.")
+             "Groq Free: limites de uso diário. Não envie informações confidenciais.")
 )
 simple.HTML = simple.HTML.replace(
     "https://hermes-cloud-production-13fb.up.railway.app", "/"
@@ -54,10 +54,12 @@ def chat_via_global_router(payload):
     # Forward only this text: not Supabase memory, files or tool outputs.
     if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\s+[A-Za-z0-9._-]{16,})", prompt):
         raise ModelUnavailable("Não enviei a mensagem: foi detectada uma possível chave privada.")
-    mode = os.getenv("HERMES_INFERENCE_MODE", "anonymous").strip().lower()
-    req = {"prompt": prompt.strip(), "sensitivity": "public", "max_tokens": 512}
-    if mode == "anonymous":
-        req["provider_id"] = "anonymous-public"
+    mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
+    req = {"prompt": prompt.strip(), "sensitivity": "normal", "max_tokens": 512}
+    if mode == "groq":
+        req["provider_id"] = "groq-free"
+    elif mode == "anonymous":
+        req.update({"provider_id": "anonymous-public", "sensitivity": "public"})
     result = router.run(req)
     if not result.get("ok"):
         failures = result.get("failures") or []
@@ -65,7 +67,22 @@ def chat_via_global_router(payload):
         errors = [f.get("error") for f in failures if isinstance(f,dict)]
         # Classify using only local error codes. Never display provider
         # response bodies, prompts or credentials in an error message.
-        if mode == "anonymous":
+        if mode == "groq":
+            if not os.getenv("GROQ_API_KEY", "").strip():
+                public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em console.groq.com/keys e salve em Environment."
+            elif result.get("error") == "no_authorized_healthy_backends":
+                public_message = "A chave GROQ_API_KEY parece inválida ou ausente."
+            elif any(s in (401, 403) for s in statuses):
+                public_message = "Groq recusou a autenticação (HTTP 401/403). Verifique GROQ_API_KEY."
+            elif 429 in statuses:
+                public_message = "O limite de chamadas gratuitas da Groq foi atingido (HTTP 429). Aguarde."
+            elif any(s in (400, 404, 422) for s in statuses):
+                public_message = "Modelo indisponível na Groq (HTTP " + str(statuses[-1]) + "). Verifique HERMES_GROQ_MODEL."
+            elif statuses:
+                public_message = "Groq temporariamente indisponível (HTTP " + str(statuses[-1]) + ")."
+            else:
+                public_message = "Sem resposta da Groq. Consulte os logs do Render."
+        elif mode == "anonymous":
             if result.get("error") == "no_authorized_healthy_backends":
                 public_message = "Rota pública desativada. Verifique HERMES_PUBLIC_ANONYMOUS_ENABLED."
             elif statuses:
@@ -84,7 +101,7 @@ def chat_via_global_router(payload):
         "type": "message",
         "content": [{"type":"output_text","text":result["response"]}]
     }]}
-    return output, result.get("provider", "anonymous-public")
+    return output, result.get("provider", "groq-free")
 
 simple.call_upstream = chat_via_global_router
 
@@ -95,5 +112,5 @@ if __name__ == "__main__":
     if not 1 <= port <= 65535:
         raise SystemExit("invalid PORT")
     print("[hermes-light] ready port=%d auth_configured=%s inference_configured=%s" % (
-        port, bool(simple.PASSWORD), bool(os.getenv("HF_TOKEN"))), flush=True)
+        port, bool(simple.PASSWORD), bool(os.getenv("GROQ_API_KEY"))), flush=True)
     ThreadingHTTPServer(("0.0.0.0",port), simple.Handler).serve_forever()
