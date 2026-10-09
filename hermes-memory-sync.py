@@ -27,7 +27,7 @@ TOKEN = os.environ.get("HERMES_MEMORY_SYNC_TOKEN", "").strip()
 HEXKEY = os.environ.get("HERMES_MEMORY_AES_KEY", "").strip()
 CHUNK = 8000
 MAX_FILE_BYTES = 128000
-MAX_DEPTH = 6
+MAX_DEPTH = 10
 IGNORED = {".git", "node_modules", ".cache", "cache", "backups", "backup", "plugins",
            "skills", "tmp", "temp", "venv", ".venv", "dist", "build", "trash"}
 SENSITIVE_LINE = re.compile(r"(?i)(?:api[_-]?key|access[_-]?token|secret[_-]?key|"
@@ -159,6 +159,7 @@ def synchronize():
     for filename in FILES:
         file = paths.get(filename)
         if not file:
+            print(f"[hermes-memory] missing {filename}: no eligible source file found",flush=True)
             continue
         try:
             raw = file.read_text(encoding="utf-8")
