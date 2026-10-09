@@ -22,18 +22,18 @@ Este repositório mantém o **Hermes Cloud** (agente e gateway) e sua **interfac
    - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` / demais configurações de acesso exigidas pelo Hermes;
    - `HERMES_MEMORY_AES_KEY`, `HERMES_MEMORY_SYNC_TOKEN`, `HERMES_MEMORY_SYNC_URL` se quiser restaurar a sincronização privada de memória Supabase com as **mesmas chaves antigas**;
    - Demais credenciais de integrações que você efetivamente usar.
-4. Variáveis não secretas recomendadas: `HERMES_GLOBAL_ROUTER_ENABLED=1`, `HERMES_GLOBAL_KEYLESS_ALLOW=0`, `HERMES_HF_MODEL=meta-llama/Llama-3.1-8B-Instruct`. Alternativa: `Qwen/Qwen2.5-14B-Instruct`.
+4. Variáveis não secretas recomendadas: `HERMES_GLOBAL_ROUTER_ENABLED=1`, `HERMES_GLOBAL_KEYLESS_ALLOW=0`, `HERMES_HF_MODEL=Qwen/Qwen2.5-7B-Instruct`. Alternativa: `Qwen/Qwen2.5-14B-Instruct`.
 5. O Space deve publicar a **porta 8080**. Internamente, o gateway/interface do Hermes continua atendendo na porta 9119, com um encaminhamento `socat` habilitado automaticamente por `SPACE_ID`.
 
 ## Modelo de IA e limites reais
 
 A API oficial é `https://router.huggingface.co/v1/chat/completions`. O roteador Hermes usa `HF_TOKEN` e faz uma chamada curta de pré-validação antes de alternar o chat principal.
 
-- Modelo inicial: `meta-llama/Llama-3.1-8B-Instruct`.
+- Modelo inicial: `Qwen/Qwen2.5-7B-Instruct`.
 - Alternativa permitida: `Qwen/Qwen2.5-14B-Instruct`.
-- A disponibilidade dos modelos e a eventual aprovação de licença de acesso dependem do provedor.
+- A disponibilidade dos modelos e a disponibilidade do serviço de inferência dependem do provedor.
 - **Esses modelos não garantem inferência gratuita.** Hugging Face Inference Providers concede apenas créditos mensais limitados a contas gratuitas; HTTP 402 indica cobrança/cota. Não habilite cobrança automaticamente. O modelo anterior é preservado se o preflight falhar.
-- O Space Docker gratuito **não carrega os pesos do modelo 8B/14B localmente**: a inferência usa um serviço externo, com suas políticas de disponibilidade e privacidade. Serviços e limites gratuitos podem mudar.
+- O Space Docker gratuito **não carrega os pesos do modelo 7B/14B localmente**: a inferência usa um serviço externo, com suas políticas de disponibilidade e privacidade. Serviços e limites gratuitos podem mudar.
 
 ## Persistência e segurança
 
@@ -43,3 +43,9 @@ Guia oficial: https://huggingface.co/docs/hub/spaces-sdks-docker
 
 ---
 **Estado:** preparação do repositório para migração. Publicar arquivos no GitHub não cria nem executa um Space automaticamente.
+
+## Render — modo leve (chat)
+
+O modo leve usa a porta `8080` e o modelo `Qwen/Qwen2.5-7B-Instruct` por padrão, sem depender do `s6-overlay` para servir a interface. A alternativa é `Qwen/Qwen2.5-14B-Instruct`, selecionável em `HERMES_HF_MODEL`. Configurar `HF_TOKEN` como segredo no **Render → Environment** (com permissão *Make calls to Inference Providers*) é obrigatório para obter respostas do modelo.
+
+O roteador tenta no máximo duas vezes quando ocorre timeout, limitação temporária de requisições ou indisponibilidade do provedor. **HTTP 401, 402 e 403 não são repetidos**: o chat apresenta um aviso específico, pois trocar o modelo não corrige problemas de credenciais, permissão ou créditos. A página `/health` indica apenas que o servidor está de pé, não que a API do Hugging Face está respondendo.

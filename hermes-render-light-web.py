@@ -39,6 +39,13 @@ simple.HTML = simple.HTML.replace(
     "https://hermes-cloud-production-13fb.up.railway.app", "/"
 )
 
+class ModelUnavailable(RuntimeError):
+    """Public error that is safe to show in the chat without exposing secrets."""
+    def __init__(self, user_message):
+        super().__init__("hf_provider_unavailable")
+        self.user_message = user_message
+
+
 def chat_via_global_router(payload):
     prompt = payload.get("input", "")
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 8000:
@@ -51,10 +58,29 @@ def chat_via_global_router(payload):
     })
     if not result.get("ok"):
         failures = result.get("failures") or []
-        codes = [str(f.get("status")) for f in failures if f.get("status")]
-        # Expose only HTTP codes; never tokens, provider error bodies or prompts.
-        label = "HTTP " + ",".join(codes) if codes else str(result.get("error","unavailable"))
-        raise RuntimeError("model_unavailable: " + label)
+        statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
+        errors = [f.get("error") for f in failures if isinstance(f,dict)]
+        # Classify using only local error codes. Never display provider
+        # response bodies, prompts or credentials in an error message.
+        if not os.getenv("HF_TOKEN", "").strip():
+            public_message = "HF_TOKEN não está configurado no Render. Configure-o em Environment."
+        elif 402 in statuses:
+            public_message = "Hugging Face recusou a inferência (HTTP 402): verifique créditos e faturamento da conta."
+        elif 401 in statuses or 403 in statuses:
+            public_message = "Hugging Face recusou a autenticação (HTTP 401/403): verifique o HF_TOKEN e as permissões."
+        elif 404 in statuses or 422 in statuses or 400 in statuses:
+            public_message = "O modelo Qwen não está disponível para esta rota de inferência (HTTP 400/404/422)."
+        elif 429 in statuses:
+            public_message = "Hugging Face está limitando as requisições (HTTP 429). Tente novamente mais tarde."
+        elif any(s in (408,500,502,503,504) for s in statuses) or any(e in ("TimeoutError","URLError") for e in errors):
+            public_message = "O provedor de IA não respondeu após até duas tentativas. Tente novamente."
+        elif result.get("error") == "router_not_enabled":
+            public_message = "O roteador de IA está desativado nas configurações do servidor."
+        elif result.get("error") == "no_authorized_healthy_backends":
+            public_message = "Não há provedor de IA disponível. Verifique o token e o modelo configurados."
+        else:
+            public_message = "O provedor de IA não retornou resposta. Verifique os logs do Hermes."
+        raise ModelUnavailable(public_message)
     output = {"output": [{
         "type": "message",
         "content": [{"type":"output_text","text":result["response"]}]

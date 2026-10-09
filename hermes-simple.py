@@ -236,8 +236,14 @@ class Handler(BaseHTTPRequestHandler):
                 out="O Hermes concluiu a execução, mas não retornou texto."
             return self.sendb(200,json.dumps({"text":out,"via":via},ensure_ascii=False))
         except Exception as e:
-            print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:500],flush=True)
-            return self.sendb(502,json.dumps({"error":"Não consegui falar com o Hermes agora. Tente novamente.","type":type(e).__name__},ensure_ascii=False))
+            # Only display deliberately sanitized messages from our inference
+            # adapter. Never echo arbitrary exception text or upstream bodies.
+            safe_message = getattr(e, "user_message", None)
+            if not isinstance(safe_message, str) or not safe_message:
+                safe_message = "Não consegui falar com o Hermes agora. Tente novamente."
+            print("[hermes-simple] chat error "+type(e).__name__+": "+str(e)[:160],flush=True)
+            status = 503 if type(e).__name__ == "ModelUnavailable" else 502
+            return self.sendb(status,json.dumps({"error":safe_message,"type":type(e).__name__},ensure_ascii=False))
 
 if __name__=="__main__":
     if not PASSWORD:

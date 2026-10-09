@@ -34,10 +34,10 @@ def configured():
     hf_token = os.getenv("HF_TOKEN", "").strip()
     if re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
         # Official Hugging Face Inference Providers; HF_TOKEN must be set as a Space Secret.
-        supported_models = {"meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
-        model = os.getenv("HERMES_HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct").strip()
+        supported_models = {"Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
+        model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen2.5-7B-Instruct").strip()
         if model not in supported_models:
-            model = "meta-llama/Llama-3.1-8B-Instruct"
+            model = "Qwen/Qwen2.5-7B-Instruct"
         active.append({
             "id": "huggingface-official",
             "url": "https://router.huggingface.co/v1/chat/completions",
@@ -86,17 +86,36 @@ def run(payload):
         req=urllib.request.Request(str(p["url"]),data=json.dumps(req_body).encode(),
             headers=headers,method="POST")
         start=time.monotonic()
-        try:
-            with urllib.request.urlopen(req,timeout=min(max(float(p.get("timeout",25)),3),45)) as res:
-                data=json.loads(res.read(4*1024*1024))
-            message=data["choices"][0]["message"]["content"]
-            if not isinstance(message,str): raise ValueError("bad_content")
-            return {"ok":True,"provider":p["id"],"model":p["model"],"keyless":bool(p.get("keyless")),"external_public":bool(p.get("public_only")),
-                    "response":message,"elapsed_ms":round((time.monotonic()-start)*1000)}
-        except urllib.error.HTTPError as e:
-            failures.append({"provider":p["id"],"error":"HTTPError","status":e.code})
-        except (urllib.error.URLError,TimeoutError,ValueError,KeyError,IndexError,TypeError) as e:
-            failures.append({"provider":p["id"],"error":type(e).__name__})
+        # At most TWO attempts for the official HF provider: the initial call
+        # and one retry, ONLY for temporary upstream failures. Never retry
+        # authorization, billing (402) or invalid-model errors.
+        max_attempts = 2 if p["id"] == "huggingface-official" else 1
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with urllib.request.urlopen(req,timeout=min(max(float(p.get("timeout",25)),3),45)) as res:
+                    data=json.loads(res.read(4*1024*1024))
+                message=data["choices"][0]["message"]["content"]
+                if not isinstance(message,str): raise ValueError("bad_content")
+                return {"ok":True,"provider":p["id"],"model":p["model"],"keyless":bool(p.get("keyless")),"external_public":bool(p.get("public_only")),
+                        "response":message,"attempts":attempt,"elapsed_ms":round((time.monotonic()-start)*1000)}
+            except urllib.error.HTTPError as e:
+                retryable = e.code in (408,425,429,500,502,503,504)
+                if retryable and attempt < max_attempts:
+                    time.sleep(0.4)
+                    continue
+                failures.append({"provider":p["id"],"error":"HTTPError","status":e.code,"attempts":attempt})
+                break
+            except (urllib.error.URLError,TimeoutError) as e:
+                if attempt < max_attempts:
+                    time.sleep(0.4)
+                    continue
+                failures.append({"provider":p["id"],"error":type(e).__name__,"attempts":attempt})
+                break
+            except (ValueError,KeyError,IndexError,TypeError) as e:
+                # An invalid/partial JSON response should not trigger repeated
+                # requests that might still count against the owner's quota.
+                failures.append({"provider":p["id"],"error":type(e).__name__,"attempts":attempt})
+                break
     return {"ok":False,"error":"all_authorized_backends_unavailable","failures":failures}
 
 if __name__=="__main__":
