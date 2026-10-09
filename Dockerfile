@@ -238,6 +238,7 @@ COPY hermes-simple.py /opt/hermes-render/hermes-simple.py
 COPY hermes-render-light-web.py /usr/local/bin/hermes-render-light-web
 COPY hermes-light-agent.py /usr/local/bin/hermes-light-agent
 COPY hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
+COPY hermes-groq-catalog-monitor.py /usr/local/bin/hermes-groq-catalog-monitor
 COPY hermes-spaces-port-run.sh /hermes-spaces-port-run.sh
 RUN chmod 0755 /hermes-spaces-port-run.sh /usr/local/bin/hermes-render-light-web \
     && /bin/bash -n /hermes-spaces-port-run.sh \
