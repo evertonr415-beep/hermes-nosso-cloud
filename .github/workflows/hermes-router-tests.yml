@@ -6,11 +6,12 @@ on:
     paths:
       - ".github/workflows/hermes-router-tests.yml"
       - "hermes-global-model-router.py"
+      - "tests/test_vector_rest.py"
       - "hermes-render-light-web.py"
       - "hermes-simple.py"
       - "tests/test_hf_router_retry.py"
       - "tests/test_public_anon_router.py"
-      - "tests/test_groq_free_router.py"
+      - "tests/test_groq_free_router.py tests/test_vector_rest.py"
       - "hermes-light-agent.py"
       - "hermes-memory-sync.py"
       - "tests/test_memory_sync.py"
@@ -47,6 +48,8 @@ jobs:
 
       - name: Install offline cryptography dependency
         run: python -m pip install 'cryptography>=42,<47'
+      - name: Check vector REST authorization offline
+        run: python -m unittest discover -s tests -p test_vector_rest.py -v
       - name: Test encrypted memory sync (offline)
         run: python -m unittest discover -s tests -p 'test_memory_sync.py' -v
       - name: Test authenticated memory restoration offline
