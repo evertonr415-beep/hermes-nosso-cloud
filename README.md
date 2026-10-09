@@ -153,3 +153,34 @@ A memória privada criptografada do Supabase permanece fora do chat leve.
 Não foram habilitados novos acessos a arquivos, alterações de infraestrutura,
 ações externas ou serviços pagos. Nenhuma garantia de sucesso em produção
 é feita sem testar o último build do Render.
+
+## Consultas verificadas em modo Avançado (09/10/2026)
+
+Quando o usuário pedir **explicitamente** o horário atual de São Paulo, uma
+pesquisa na Wikipédia ou um cálculo usando a calculadora, o modo avançado
+agora executa diretamente a ferramenta correspondente. Não é permitido
+que o modelo substitua uma ferramenta indisponível por uma alegação
+inventada. Uma pergunta combinada como
+`consulte o horário de São Paulo e pesquisar Arapongas na Wikipédia`
+deve executar duas ferramentas independentes e informar quais fontes foram
+consultadas. O conteúdo de terceiros é tratado como dado não confiável.
+
+As consultas à Wikipédia retornam títulos e trechos resumidos fornecidos
+pelo serviço Wikimedia com links de artigo gerados somente para
+`pt.wikipedia.org` ou `en.wikipedia.org`; nenhum número de habitantes,
+data de fundação, atividade econômica ou característica local é inserido
+se não estiver nos trechos efetivamente obtidos. Se o serviço não responder,
+a resposta deve informar que a pesquisa falhou em vez de inventar um resumo.
+
+A interface apresenta os links públicos da Wikipédia de maneira clicável e
+traduz `\\times` para ×. Continua escapando integralmente o conteúdo
+antes de aplicar Markdown seguro para não executar HTML/JavaScript de
+respostas da IA. A quantidade de ferramentas só é exibida se houver
+execução realmente confirmada pelo agente.
+
+Execute os testes offline `tests/test_light_agent.py` e
+`tests/test_advanced_ui.py` (sintaxe JavaScript verificada pelo Node).
+Após implantar o último commit no Render, valide também uma consulta real à
+Wikipédia e ao relógio. O êxito de um teste offline não garante acesso à API
+da Wikimedia a partir do Render. O modelo base gratuito continua o mesmo;
+a recuperação de memória privada permanece desativada no modo leve.
