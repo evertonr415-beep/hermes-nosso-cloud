@@ -61,6 +61,50 @@ class AdvancedUiTests(unittest.TestCase):
         basic.assert_not_called()
         advanced.assert_called_once_with("2+3")
 
+    def test_mobile_layout_cannot_force_horizontal_viewport_scroll(self):
+        markup=app.simple.HTML
+        self.assertIn("overflow-x:hidden",markup)
+        self.assertIn(".model{flex:1 1 0;width:0;min-width:0",markup)
+        self.assertIn(".composerbar{left:0;right:0;max-width:100%",markup)
+        self.assertIn("overflow-wrap:anywhere",markup)
+
+    def test_genuine_tool_counter_only_in_advanced_mode(self):
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","HERMES_AGENT_TOOLS_ENABLED":"1"},clear=False), \
+             patch.object(app.agent,"answer",return_value={"ok":True,"response":"Resultado","provider":"groq-free-advanced","tools_used":2}):
+            result,via=app.chat_via_global_router({"input":"Calcule e pesquise","route":"advanced"})
+        self.assertEqual(result["hermes_tools_used"],2)
+        self.assertEqual(via,"groq-free-advanced")
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq"},clear=False), \
+             patch.object(app.router,"run",return_value={"ok":True,"response":"2000","provider":"groq-free"}):
+            result,via=app.chat_via_global_router({"input":"Quanto é 500*4?","route":"auto"})
+        self.assertNotIn("hermes_tools_used",result)
+
+    def test_sanitized_markdown_renders_without_html_injection(self):
+        if not shutil.which("node"):
+            self.skipTest("Node.js unavailable")
+        markup=app.simple.HTML
+        script=re.search(r"<script>(.*?)</script>",markup,flags=re.S).group(1)
+        esc_js=re.search(r"function esc\(s\)\{[^\n]*\}",script).group(0)
+        format_js=re.search(r"function formatAnswer\(s\)\{.*?\n\}",script,flags=re.S).group(0)
+        node_code=esc_js+"\n"+format_js+"\n"+r'''
+const backtick=String.fromCharCode(96);
+const outputs=[
+    formatAnswer('**2000**'),
+    formatAnswer('<img src=x onerror=alert(1)>'),
+    formatAnswer(backtick+'print(42)'+backtick)
+];
+process.stdout.write(JSON.stringify(outputs));
+'''
+        result=subprocess.run(["node","-e",node_code],capture_output=True,text=True,timeout=8)
+        self.assertEqual(result.returncode,0,result.stderr)
+        import json
+        values=json.loads(result.stdout)
+        self.assertEqual(values[0],"<strong>2000</strong>")
+        self.assertIn("&lt;img",values[1])
+        self.assertNotIn("<img",values[1])
+        self.assertIn("<code>print(42)</code>",values[2])
+        self.assertNotIn("<script>",values[1])
+
     def test_generated_browser_script_syntax(self):
         if not shutil.which("node"):
             self.skipTest("Node.js unavailable")
