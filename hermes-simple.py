@@ -223,7 +223,7 @@ class Handler(BaseHTTPRequestHandler):
             route=(msg.get("route") or "auto").strip()
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
-            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
+            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True,"route":route}
             if route=="auto":
                 payload.update({"model":"gpt-5.6-sol"})
             if route=="matrix":
