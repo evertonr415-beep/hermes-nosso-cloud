@@ -178,7 +178,7 @@ RUN test -f /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/SKILL.md
 
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
-RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography python3-yaml git curl jq \
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography python3-yaml git curl jq socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Vercel Sandbox SDK is lazy-installed by Hermes itself through its managed
@@ -221,6 +221,14 @@ RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /etc/cont-init.d/01-hermes-vercel-sandbox \
     /etc/cont-init.d/02-hermes-private-executor \
     /etc/services.d/hermes-bucket-backup/run
+
+# Hugging Face Spaces publishes one HTTP port. Route it to the existing
+# Hermes Cloud dashboard (which also serves the integrated Hermes web UI).
+# The separate Railway hermes-web service is not started in this container.
+COPY hermes-spaces-port-run.sh /etc/services.d/hermes-spaces-port/run
+RUN chmod 0755 /etc/services.d/hermes-spaces-port/run \
+    && sh -n /etc/services.d/hermes-spaces-port/run
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
 CMD ["sleep", "infinity"]

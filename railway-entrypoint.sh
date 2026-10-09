@@ -110,10 +110,10 @@ if hf_token.startswith("hf_") and len(hf_token) >= 23:
         )
         probe = json.loads(test.stdout.strip() or "{}")
         if test.returncode == 0 and probe.get("ok") is True and probe.get("provider") == "huggingface-official":
-            allowed = {"Qwen/Qwen2.5-72B-Instruct", "meta-llama/Meta-Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct-1M"}
-            hf_model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen2.5-72B-Instruct")
+            allowed = {"meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
+            hf_model = os.getenv("HERMES_HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
             model["provider"] = "hf"
-            model["default"] = hf_model if hf_model in allowed else "Qwen/Qwen2.5-72B-Instruct"
+            model["default"] = hf_model if hf_model in allowed else "meta-llama/Llama-3.1-8B-Instruct"
             print("[hf-official] preflight passed; Hermes Cloud default switched to HF", flush=True)
         else:
             print("[hf-official] preflight unavailable error=%s failures=%s; existing primary chat retained" % (str(probe.get("error","unknown"))[:48], str(probe.get("failures",[]))[:280]),flush=True)
@@ -140,6 +140,18 @@ providers["matrix"] = {
     "discover_models": True,
     "models": {
         "claude-opus-5": {},
+    },
+}
+# Native Hermes transport for the same official provider used by the router.
+# A successful authenticated preflight still gates changing the default model.
+providers["hf"] = {
+    "name": "Hugging Face Inference Providers",
+    "api": "https://router.huggingface.co/v1",
+    "key_env": "HF_TOKEN",
+    "transport": "chat_completions",
+    "models": {
+        "meta-llama/Llama-3.1-8B-Instruct": {},
+        "Qwen/Qwen2.5-14B-Instruct": {},
     },
 }
 providers["hermes-local"] = {

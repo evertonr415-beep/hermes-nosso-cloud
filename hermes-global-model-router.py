@@ -33,11 +33,11 @@ def configured():
         active.append(p)
     hf_token = os.getenv("HF_TOKEN", "").strip()
     if re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
-        # Official Hugging Face Inference Providers; secret comes only from Railway.
-        supported_models = {"Qwen/Qwen2.5-72B-Instruct", "meta-llama/Meta-Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct-1M"}
-        model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen2.5-72B-Instruct").strip()
+        # Official Hugging Face Inference Providers; HF_TOKEN must be set as a Space Secret.
+        supported_models = {"meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
+        model = os.getenv("HERMES_HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct").strip()
         if model not in supported_models:
-            model = "Qwen/Qwen2.5-72B-Instruct"
+            model = "meta-llama/Llama-3.1-8B-Instruct"
         active.append({
             "id": "huggingface-official",
             "url": "https://router.huggingface.co/v1/chat/completions",
