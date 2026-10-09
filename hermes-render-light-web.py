@@ -72,8 +72,16 @@ def chat_via_global_router(payload):
                 public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em console.groq.com/keys e salve em Environment."
             elif result.get("error") == "no_authorized_healthy_backends":
                 public_message = "A chave GROQ_API_KEY parece inválida ou ausente."
-            elif any(s in (401, 403) for s in statuses):
-                public_message = "Groq recusou a autenticação (HTTP 401/403). Verifique GROQ_API_KEY."
+            elif 401 in statuses:
+                public_message = "Groq HTTP 401: chave GROQ_API_KEY inválida, revogada ou incorreta. Gere uma nova chave no GroqCloud e atualize o Render."
+            elif 403 in statuses:
+                details = [f.get("code") for f in failures if isinstance(f,dict)]
+                if "model_permission_blocked_org" in details:
+                    public_message = "Groq HTTP 403: modelo bloqueado na organização. Em GroqCloud, abra Settings > Organization > Limits."
+                elif "model_permission_blocked_project" in details:
+                    public_message = "Groq HTTP 403: modelo bloqueado no projeto. Em GroqCloud, abra Settings > Projects > Limits."
+                else:
+                    public_message = "Groq HTTP 403: acesso negado. Verifique as permissões do modelo no projeto/organização e o estado da conta Groq."
             elif 429 in statuses:
                 public_message = "O limite de chamadas gratuitas da Groq foi atingido (HTTP 429). Aguarde."
             elif any(s in (400, 404, 422) for s in statuses):

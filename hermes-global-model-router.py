@@ -238,6 +238,19 @@ def run(payload):
                     }
                 except urllib.error.HTTPError as exc:
                     status = exc.code
+                    # For 403, Groq may report an organization/project model
+                    # permission block. Read only an allowlisted machine error
+                    # code: never display raw provider messages, tokens or URLs.
+                    safe_code = None
+                    if p["id"] == "groq-free" and status == 403:
+                        try:
+                            response_error = json.loads(exc.read(2048)).get("error", {})
+                            if isinstance(response_error, dict):
+                                code = response_error.get("code")
+                                if code in ("model_permission_blocked_org", "model_permission_blocked_project"):
+                                    safe_code = code
+                        except (ValueError, OSError, TypeError):
+                            pass
                     # These errors may be a model/provider routing mismatch.
                     # At most one alternate live Qwen model is tried.
                     if is_hf and status in (400, 404, 422):
@@ -250,11 +263,14 @@ def run(payload):
                     if (status in (408, 425, 500, 502, 503, 504) or (status == 429 and p["id"] != "groq-free")) and attempt < max_attempts:
                         time.sleep(0.4)
                         continue
-                    failures.append({
+                    failure = {
                         "provider": p["id"], "model": routed_model,
                         "error": "HTTPError", "status": status,
                         "attempts": attempt,
-                    })
+                    }
+                    if safe_code:
+                        failure["code"] = safe_code
+                    failures.append(failure)
                     # Never retry auth failures or payment/quota errors by
                     # moving to another model or provider.
                     if status in (401, 402, 403, 429):

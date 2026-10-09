@@ -69,6 +69,33 @@ class GroqFreeTests(unittest.TestCase):
         self.assertEqual(result["failures"][0]["status"], 429)
         self.assertEqual(send.call_count, 1)
 
+    def test_403_org_model_permission_code_is_safely_classified(self):
+        from io import BytesIO
+        error = urllib.error.HTTPError(
+            "https://api.groq.com", 403, "Forbidden", None,
+            BytesIO(json.dumps({"error": {
+                "code": "model_permission_blocked_org",
+                "message": "Never echo this remote message or any secret",
+            }}).encode()),
+        )
+        with (patch.dict(os.environ, ENV, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=error) as send):
+            result = self.query()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failures"][0]["status"], 403)
+        self.assertEqual(result["failures"][0]["code"], "model_permission_blocked_org")
+        self.assertNotIn("message", result["failures"][0])
+        self.assertEqual(send.call_count, 1)
+
+    def test_401_invalid_key_not_retried(self):
+        error = urllib.error.HTTPError("https://api.groq.com", 401, "invalid", None, None)
+        with (patch.dict(os.environ, ENV, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=error) as send):
+            result = self.query()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failures"][0]["status"], 401)
+        self.assertEqual(send.call_count, 1)
+
     def test_another_documented_free_model_is_allowed(self):
         with patch.dict(os.environ, {**ENV, "HERMES_GROQ_MODEL": "openai/gpt-oss-20b"}, clear=True):
             self.assertEqual(router.configured()[0]["model"], "openai/gpt-oss-20b")
