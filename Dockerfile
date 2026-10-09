@@ -134,6 +134,15 @@ COPY global-distributed-ai-cloud-architecture/SKILL.md /opt/hermes/skills/cloud/
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/global-decentralized-inference-orchestrator
 COPY global-decentralized-inference-orchestrator/SKILL.md /opt/hermes/skills/autonomous-ai-agents/global-decentralized-inference-orchestrator/SKILL.md
 
+# Encrypted memory sync: client-side AES-256-GCM before Supabase, no public memory port.
+RUN mkdir -p /opt/hermes/skills/data-management/hermes-encrypted-cloud-memory-sync
+COPY hermes-encrypted-cloud-memory-sync/SKILL.md /opt/hermes/skills/data-management/hermes-encrypted-cloud-memory-sync/SKILL.md
+COPY hermes-memory-sync.py /usr/local/bin/hermes-memory-sync
+COPY hermes-memory-sync-run.sh /etc/services.d/hermes-memory-sync/run
+RUN chmod 0755 /usr/local/bin/hermes-memory-sync /etc/services.d/hermes-memory-sync/run \
+    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-memory-sync
+
+
 # Optional, bounded HTTPS inference router; fails closed until its owner explicitly enables providers.
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/hermes-worldwide-model-router
 COPY hermes-global-model-router.py /usr/local/bin/hermes-global-model-router
