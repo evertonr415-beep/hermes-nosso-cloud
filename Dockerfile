@@ -230,17 +230,17 @@ RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
     /etc/cont-init.d/02-hermes-private-executor \
     /etc/services.d/hermes-bucket-backup/run
 
-# Hugging Face Spaces publishes one HTTP port. Route it to the existing
-# Hermes Cloud dashboard (which also serves the integrated Hermes web UI).
-# The separate Railway hermes-web service is not started in this container.
-COPY hermes-spaces-port-run.sh /etc/services.d/hermes-spaces-port/run
-RUN chmod 0755 /etc/services.d/hermes-spaces-port/run \
-    && sh -n /etc/services.d/hermes-spaces-port/run
-EXPOSE 8080
-
-ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
-CMD ["sleep", "infinity"]
-
-# Render diagnostic mode: explicit container startup identity. s6 may still
-# switch individual services to Hermes uid 10000 via its own supervision.
+# Render / Hugging Face Spaces: start the lightweight HTTP server directly.
+# It uses the existing Hermes Web chat UI and official global inference router.
+# The full Hermes/s6 image is preserved but is not started in lightweight mode.
 USER root
+COPY hermes-simple.py /opt/hermes-render/hermes-simple.py
+COPY hermes-render-light-web.py /usr/local/bin/hermes-render-light-web
+COPY hermes-spaces-port-run.sh /hermes-spaces-port-run.sh
+RUN chmod 0755 /hermes-spaces-port-run.sh /usr/local/bin/hermes-render-light-web \
+    && /bin/bash -n /hermes-spaces-port-run.sh \
+    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-render-light-web /opt/hermes-render/hermes-simple.py
+ENV PORT=8080
+EXPOSE 8080
+ENTRYPOINT []
+CMD ["/bin/bash", "/hermes-spaces-port-run.sh"]

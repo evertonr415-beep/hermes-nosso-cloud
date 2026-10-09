@@ -1,13 +1,33 @@
-#!/command/with-contenv sh
+#!/bin/bash
 set -eu
-# Requested startup safeguard. Note: s6-log starts before this s6 service.
-mkdir -p /opt/data/logs/gateways
-# Platform-agnostic temporary storage for ephemeral diagnostics/cache.
-# socat logs to stderr (captured by Render/Spaces), never /opt/data/logs.
+# Render/Spaces startup: do NOT invoke s6-overlay on the critical boot path.
 export TMPDIR=/tmp
-# The base Hermes container uses s6; on Spaces publish the already-supervised
-# Cloud gateway/UI on one public HTTP port. Do not expose private model APIs.
-if [ -z "${SPACE_ID:-}" ] && [ "${HERMES_SPACE_MODE:-0}" != "1" ]; then
-  exec sleep infinity
+export HERMES_GLOBAL_ROUTER_ENABLED=1
+export HERMES_GLOBAL_KEYLESS_ALLOW=0
+export PYTHONDONTWRITEBYTECODE=1
+
+# Keep the original full-agent entrypoint accessible for later restoration;
+# this mode still requires s6 and must be selected explicitly.
+if [ "${HERMES_STARTUP_MODE:-light}" = "full" ]; then
+  exec /usr/local/bin/hermes-railway-entrypoint "$@"
 fi
-exec /usr/bin/socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9119
+
+# Router is a request/response CLI, not an HTTP daemon: run a *local*
+# status check, then invoke it on demand from the web handler.
+(
+  /usr/bin/python3 -u /usr/local/bin/hermes-global-model-router --status >/dev/null 2>&1 || true
+) &
+
+# Memory sync is separate from the HTTP startup, and runs only when configured.
+# No /opt/data/logs/gateways or s6-log requirement in light mode.
+if [ -n "${HERMES_MEMORY_SYNC_URL:-}" ] && [ -n "${HERMES_MEMORY_SYNC_TOKEN:-}" ] && [ -n "${HERMES_MEMORY_AES_KEY:-}" ]; then
+  (
+    while true; do
+      /usr/bin/python3 -u /usr/local/bin/hermes-memory-sync --once || true
+      sleep 300
+    done
+  ) &
+fi
+
+# Replace PID 1 with a functioning web server, not a TCP proxy to a dead port.
+exec /usr/bin/python3 -u /usr/local/bin/hermes-render-light-web
