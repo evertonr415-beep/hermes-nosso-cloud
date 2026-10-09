@@ -58,10 +58,27 @@ Se o modelo escolhido for rejeitado com HTTP 400, 404 ou 422, será tentado **no
 
 O endpoint `/health` confirma apenas que o servidor web iniciou. Ele não prova que o acesso ao modelo, os créditos de inferência ou a memória do Supabase estejam funcionando. Serviços do Hugging Face podem exigir créditos mesmo para modelos open source.
 
-## Render — inferência anônima de texto
+## Render — inferência anônima de texto (LEGADO; não é mais a configuração padrão)
 
 A inicialização leve usa por padrão `HERMES_INFERENCE_MODE=anonymous`, com `HERMES_PUBLIC_ANONYMOUS_ENABLED=1`, enviando **somente o texto digitado no chat** a `https://vireonix.ai/v1/chat/completions` e modelo remoto `auto`. É uma API de terceiros, não relacionada ao Duck.ai ou aos Inference Providers do Hugging Face. Documentação do serviço: https://vireonix.ai/docs.
 
 Não é necessário `HF_TOKEN` no modo anônimo. Mesmo que o token exista no Render, ele **não é enviado ao provedor público** e nenhuma chamada de inferência é feita pelo roteador ao Hugging Face. Para restaurar uma rota autenticada opcional no futuro, use `HERMES_INFERENCE_MODE=auto`; nesse modo, uma resposta HTTP 402 pode encaminhar **somente prompts públicos** para o serviço anônimo (`HERMES_FALLBACK_ON_HF_402=1`). As chamadas falhas não são tratadas como respostas válidas.
 
 **Aviso de privacidade e disponibilidade:** a Vireonix declara acesso sem chave e limites por IP, mas não garante SLA ou continuidade. As mensagens enviadas podem ser processadas e armazenadas de acordo com a política do terceiro. Nunca envie senhas, dados pessoais, informações de trabalho restritas, histórico de memória criptografada ou arquivos confidenciais. O modo leve não faz leitura automática da memória do Supabase. Não há garantia de chat gratuito ilimitado ou estável em produção. `/health` testa apenas o servidor web; a resposta efetiva da API requer teste real depois do deploy.
+
+## Configuração atual do Render — GroqCloud Free
+
+A nova configuração utiliza a API oficial da GroqCloud no **plano Free** e o modelo **qwen/qwen3.8-27b**.
+Os limites atualmente documentados para esse modelo são **30 requisições por minuto e 1.000 por dia**, além de limites de tokens. É gratuito dentro da franquia, não ilimitado.
+
+**Para ativar no Render:**
+1. Crie uma chave gratuita em https://console.groq.com/keys e mantenha a conta no plano Free, sem ativar Developer/Billing.
+2. Adicione a chave como variável secreta GROQ_API_KEY em Render → Environment; não publique a chave no GitHub ou neste chat.
+3. Garanta HERMES_INFERENCE_MODE=groq, HERMES_PUBLIC_ANONYMOUS_ENABLED=0 e HERMES_GLOBAL_KEYLESS_ALLOW=0 (padrões da inicialização leve).
+4. Faça novo deploy e teste uma mensagem simples.
+
+Endpoint: https://api.groq.com/openai/v1/chat/completions . Modelo padrão: qwen/qwen3.8-27b . Modelo alternativo para configurar manualmente: openai/gpt-oss-20b via HERMES_GROQ_MODEL.
+O modo Groq não faz chamadas ao Hugging Face nem à Vireonix. Não usa o HF_TOKEN, não altera plano de cobrança, e devolve erro 429 ao exceder a franquia gratuita.
+O texto da mensagem é processado pela Groq. O modo leve não lê memória criptografada do Supabase nem envia chaves da plataforma. Evite incluir dados confidenciais.
+
+Fontes oficiais: https://console.groq.com/docs/openai e https://console.groq.com/docs/rate-limits .

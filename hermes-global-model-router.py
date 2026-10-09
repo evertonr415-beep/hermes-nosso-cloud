@@ -247,7 +247,7 @@ def run(payload):
                             "attempts": attempt,
                         })
                         break
-                    if status in (408, 425, 429, 500, 502, 503, 504) and attempt < max_attempts:
+                    if (status in (408, 425, 500, 502, 503, 504) or (status == 429 and p["id"] != "groq-free")) and attempt < max_attempts:
                         time.sleep(0.4)
                         continue
                     failures.append({
