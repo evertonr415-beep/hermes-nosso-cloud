@@ -273,9 +273,10 @@ class Handler(BaseHTTPRequestHandler):
             text=(msg.get("input") or "").strip()
             conv=(msg.get("conversation") or "").strip()
             route=(msg.get("route") or "auto").strip()
+            use_memory = msg.get("use_memory") is True
             if not text:
                 return self.sendb(400,'{"error":"Mensagem vazia"}')
-            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True,"route":route}
+            payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True,"route":route,"use_memory":use_memory}
             if route=="auto":
                 payload.update({"model":"gpt-5.6-sol"})
             if route=="matrix":
