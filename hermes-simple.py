@@ -95,7 +95,7 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
     <header class="topbar">
       <button class="menu" id="menu">☰</button>
       <select class="model" id="model">
-        <option value="auto">Automático · HF oficial / Hermes</option>
+        <option value="auto">Automático · GPT-6 Sol</option>
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
         <option value="global-public">DeepSeek V4 · Público (sem chave)</option>
