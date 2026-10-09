@@ -116,7 +116,7 @@ if hf_token.startswith("hf_") and len(hf_token) >= 23:
             model["default"] = hf_model if hf_model in allowed else "Qwen/Qwen2.5-72B-Instruct"
             print("[hf-official] preflight passed; Hermes Cloud default switched to HF", flush=True)
         else:
-            print("[hf-official] preflight unavailable; existing primary chat retained", flush=True)
+            print("[hf-official] preflight unavailable error=%s failures=%s; existing primary chat retained" % (str(probe.get("error","unknown"))[:48], str(probe.get("failures",[]))[:280]),flush=True)
     except (ValueError, OSError, subprocess.TimeoutExpired):
         print("[hf-official] preflight failed; existing primary chat retained", flush=True)
 else:
