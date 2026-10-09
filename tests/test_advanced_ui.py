@@ -105,6 +105,31 @@ process.stdout.write(JSON.stringify(outputs));
         self.assertIn("<code>print(42)</code>",values[2])
         self.assertNotIn("<script>",values[1])
 
+    def test_wikipedia_links_math_and_escaping(self):
+        if not shutil.which("node"):
+            self.skipTest("Node.js unavailable")
+        markup=app.simple.HTML
+        script=re.search(r"<script>(.*?)</script>",markup,flags=re.S).group(1)
+        esc_js=re.search(r"function esc\(s\)\{[^\n]*\}",script).group(0)
+        format_js=re.search(r"function formatAnswer\(s\)\{.*?\n\}",script,flags=re.S).group(0)
+        node_code=esc_js+"\n"+format_js+"\n"+r'''
+const tests=[
+    formatAnswer('[Abrir artigo na Wikipédia](https://pt.wikipedia.org/wiki/Arapongas)'),
+    formatAnswer(String.raw`\((125+375) \times 4\)`),
+    formatAnswer('[evil](javascript:alert(1))'),
+    formatAnswer('<script>alert(1)</script>'),
+];
+process.stdout.write(JSON.stringify(tests));
+'''
+        result=subprocess.run(["node","-e",node_code],capture_output=True,text=True,timeout=8)
+        self.assertEqual(result.returncode,0,result.stderr)
+        import json
+        values=json.loads(result.stdout)
+        self.assertIn('href="https://pt.wikipedia.org/wiki/Arapongas"',values[0])
+        self.assertIn("×",values[1])
+        self.assertNotIn("href=",values[2])
+        self.assertNotIn("<script>",values[3])
+
     def test_generated_browser_script_syntax(self):
         if not shutil.which("node"):
             self.skipTest("Node.js unavailable")
