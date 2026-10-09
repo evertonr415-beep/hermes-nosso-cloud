@@ -23,6 +23,8 @@ on:
       - "tests/test_advanced_ui.py"
       - "hermes-simple.py"
       - "Dockerfile"
+      - "hermes-infra-audit.py"
+      - "tests/test_infra_audit.py"
       - "tests/test_memory_chat.py"
       - "tests/test_memory_ranking.py"
   pull_request:
@@ -44,7 +46,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py
       - name: Run offline inference-router regression tests
         run: |
           python -m unittest discover -s tests -p 'test_*router*.py' -v
@@ -59,6 +61,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_memory_sync.py' -v
       - name: Test authenticated memory restoration offline
         run: python -m unittest discover -s tests -p 'test_memory_recovery.py' -v
+      - name: Test bounded infrastructure audit
+        run: python -m unittest discover -s tests -p test_infra_audit.py -v
       - name: Test read-only advanced agent
         run: |
           python -m unittest discover -s tests -p 'test_light_agent.py' -v
