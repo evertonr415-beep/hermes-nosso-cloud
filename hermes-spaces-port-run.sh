@@ -4,6 +4,9 @@ set -eu
 export TMPDIR=/tmp
 export HERMES_GLOBAL_ROUTER_ENABLED=1
 export HERMES_GLOBAL_KEYLESS_ALLOW=0
+export HERMES_INFERENCE_MODE="${HERMES_INFERENCE_MODE:-anonymous}"
+export HERMES_PUBLIC_ANONYMOUS_ENABLED="${HERMES_PUBLIC_ANONYMOUS_ENABLED:-1}"
+export HERMES_FALLBACK_ON_HF_402="${HERMES_FALLBACK_ON_HF_402:-1}"
 export PYTHONDONTWRITEBYTECODE=1
 
 # Keep the original full-agent entrypoint accessible for later restoration;

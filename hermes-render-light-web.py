@@ -8,6 +8,7 @@ with HERMES_STARTUP_MODE=full if s6 is viable on the target platform.
 import importlib.util
 import json
 import os
+import re
 import sys
 from importlib.machinery import SourceFileLoader
 from http.server import ThreadingHTTPServer
@@ -29,11 +30,11 @@ router = load_module("hermes_render_model_router", ROUTER_PATH)
 # The legacy UI displayed Railway-specific model names and a Railway link.
 # In lightweight mode all chat prompts use ONLY this deployment's global router.
 simple.HTML = (simple.HTML
-    .replace("Automático · GPT-5.6 Sol", "Hugging Face · Automático")
+    .replace("Automático · GPT-5.6 Sol", "IA pública anônima · Auto")
     .replace('<option value="matrix">Matrix</option>', "")
     .replace('<option value="local">Hermes Local</option>', "")
     .replace("Hermes pode usar ferramentas, memória e skills em segundo plano.",
-             "Modo leve: chat de texto. Ferramentas avançadas requerem o Hermes completo.")
+             "Modo público: mensagens são enviadas a serviço terceiro. Não envie dados pessoais nem segredos.")
 )
 simple.HTML = simple.HTML.replace(
     "https://hermes-cloud-production-13fb.up.railway.app", "/"
@@ -50,51 +51,40 @@ def chat_via_global_router(payload):
     prompt = payload.get("input", "")
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 8000:
         raise ValueError("message_invalid")
-    result = router.run({
-        "prompt": prompt.strip(),
-        "sensitivity": "normal",  # Never opt into public-only, unaudited endpoints.
-        "provider_id": "huggingface-official",
-        "max_tokens": 512,
-    })
+    # Forward only this text: not Supabase memory, files or tool outputs.
+    if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\\s+[A-Za-z0-9._-]{16,})", prompt):
+        raise ModelUnavailable("Não enviei a mensagem: foi detectada uma possível chave privada.")
+    mode = os.getenv("HERMES_INFERENCE_MODE", "anonymous").strip().lower()
+    req = {"prompt": prompt.strip(), "sensitivity": "public", "max_tokens": 512}
+    if mode == "anonymous":
+        req["provider_id"] = "anonymous-public"
+    result = router.run(req)
     if not result.get("ok"):
         failures = result.get("failures") or []
         statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
         errors = [f.get("error") for f in failures if isinstance(f,dict)]
         # Classify using only local error codes. Never display provider
         # response bodies, prompts or credentials in an error message.
-        if not os.getenv("HF_TOKEN", "").strip():
-            public_message = "HF_TOKEN não está configurado no Render. Configure-o em Environment."
+        if mode == "anonymous":
+            if result.get("error") == "no_authorized_healthy_backends":
+                public_message = "Rota pública desativada. Verifique HERMES_PUBLIC_ANONYMOUS_ENABLED."
+            elif statuses:
+                public_message = "API pública indisponível (HTTP " + str(statuses[-1]) + ")."
+            else:
+                public_message = "Não foi possível acessar o provedor público. Verifique logs do Render."
         elif 402 in statuses:
-            public_message = "Hugging Face recusou a inferência (HTTP 402): verifique créditos e faturamento da conta."
-        elif 401 in statuses or 403 in statuses:
-            public_message = "Hugging Face recusou a autenticação (HTTP 401/403): verifique o HF_TOKEN e as permissões."
-        elif any(s in (400, 404, 422) for s in statuses):
-            exact = statuses[-1]
-            model = failures[-1].get("model", "Qwen") if failures else "Qwen"
-            # Safe: model comes from a fixed allowlist, never a freeform
-            # provider response or user-supplied text.
-            public_message = ("Hugging Face rejeitou a rota do modelo (" +
-                              str(model) + ", HTTP " + str(exact) +
-                              "). Consulte a lista oficial de modelos ativos." )
-        elif 429 in statuses:
-            public_message = "Hugging Face está limitando as requisições (HTTP 429). Tente novamente mais tarde."
-        elif any(s in (408,500,502,503,504) for s in statuses) or any(e in ("TimeoutError","URLError") for e in errors):
-            public_message = "O provedor de IA não respondeu após até duas tentativas. Tente novamente."
-        elif result.get("error") == "router_not_enabled":
-            public_message = "O roteador de IA está desativado nas configurações do servidor."
-        elif result.get("error") == "no_authorized_healthy_backends":
-            public_message = "Não há provedor de IA disponível. Verifique o token e o modelo configurados."
-        elif any(f.get("error") == "no_live_qwen_models" for f in failures if isinstance(f, dict)):
-            public_message = "Nenhum modelo Qwen ativo foi encontrado no catálogo oficial do Hugging Face."
-
+            public_message = "HF retornou HTTP 402 e a rota pública não respondeu."
+        elif statuses:
+            public_message = "Falha de inferência HTTP " + str(statuses[-1])
         else:
-            public_message = "O provedor de IA não retornou resposta. Verifique os logs do Hermes."
+            public_message = "Não há provedor de IA disponível."
+
         raise ModelUnavailable(public_message)
     output = {"output": [{
         "type": "message",
         "content": [{"type":"output_text","text":result["response"]}]
     }]}
-    return output, "huggingface-official"
+    return output, result.get("provider", "anonymous-public")
 
 simple.call_upstream = chat_via_global_router
 

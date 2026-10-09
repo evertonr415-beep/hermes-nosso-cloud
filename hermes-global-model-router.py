@@ -116,8 +116,15 @@ def configured():
         if parsed.port not in (None,443): continue
         if not parsed.path.endswith("/chat/completions"): continue
         active.append(p)
+    # Third-party anonymous API. Never forward HF credentials; public prompts only.
+    mode = os.getenv("HERMES_INFERENCE_MODE", "anonymous").strip().lower()
+    if os.getenv("HERMES_PUBLIC_ANONYMOUS_ENABLED", "0") == "1":
+        active.append({"id": "anonymous-public",
+            "url": "https://vireonix.ai/v1/chat/completions",
+            "model": "auto", "priority": -10 if mode == "anonymous" else 3,
+            "public_only": True, "keyless": True, "timeout": 20, "max_tokens": 512})
     hf_token = os.getenv("HF_TOKEN", "").strip()
-    if re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
+    if mode != "anonymous" and re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
         # Official Hugging Face Inference Providers; HF_TOKEN must be set as a Space Secret.
         supported_models = set(HF_MODEL_PREFERENCES)
         model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen3-4B-Instruct-2507").strip()
@@ -193,7 +200,7 @@ def run(payload):
                 str(p["url"]), data=json.dumps(req_body).encode(),
                 headers=headers, method="POST",
             )
-            max_attempts = 2 if is_hf else 1
+            max_attempts = 2 if (is_hf or p["id"] == "anonymous-public") else 1
             for attempt in range(1, max_attempts + 1):
                 start = time.monotonic()
                 try:
@@ -233,11 +240,14 @@ def run(payload):
                     # Never retry auth failures or payment/quota errors by
                     # moving to another model or provider.
                     if status in (401, 402, 403, 429):
-                        return {
-                            "ok": False,
-                            "error": "all_authorized_backends_unavailable",
-                            "failures": failures,
-                        }
+                        allow_402_fallback = (
+                            is_hf and status == 402
+                            and os.getenv("HERMES_FALLBACK_ON_HF_402", "0") == "1"
+                            and payload.get("sensitivity") == "public"
+                            and any(other["id"] == "anonymous-public" for other in providers)
+                        )
+                        if not allow_402_fallback:
+                            return {"ok": False, "error": "all_authorized_backends_unavailable", "failures": failures}
                     break
                 except (urllib.error.URLError, TimeoutError) as exc:
                     if attempt < max_attempts:
@@ -270,8 +280,10 @@ def run(payload):
 if __name__=="__main__":
     try:
         if "--probe" in sys.argv:
+            provider = ("anonymous-public" if os.getenv("HERMES_INFERENCE_MODE", "anonymous") == "anonymous"
+                        else "huggingface-official")
             test=run({"prompt":"Diga OK.", "sensitivity":"public",
-                      "provider_id":"huggingface-official", "max_tokens":16})
+                      "provider_id":provider, "max_tokens":16})
             result={"ok":bool(test.get("ok")),"provider":test.get("provider"),
                     "elapsed_ms":test.get("elapsed_ms"),
                     "error":test.get("error"),"failures":test.get("failures",[])}
