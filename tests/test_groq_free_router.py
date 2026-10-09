@@ -87,6 +87,36 @@ class GroqFreeTests(unittest.TestCase):
         self.assertNotIn("message", result["failures"][0])
         self.assertEqual(send.call_count, 1)
 
+    def test_html_403_is_not_misdiagnosed_as_model_permission(self):
+        from io import BytesIO
+        error = urllib.error.HTTPError(
+            "https://api.groq.com", 403, "Forbidden",
+            {"Content-Type": "text/html; charset=utf-8"},
+            BytesIO(b"<html><title>Access denied</title></html>"),
+        )
+        with (patch.dict(os.environ, ENV, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=error) as send):
+            result = self.query()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failures"][0]["response_kind"], "html")
+        self.assertNotIn("code", result["failures"][0])
+        self.assertNotIn("Access denied", str(result))
+        self.assertEqual(send.call_count, 1)
+
+    def test_unknown_json_403_does_not_display_raw_error(self):
+        from io import BytesIO
+        error = urllib.error.HTTPError(
+            "https://api.groq.com", 403, "Forbidden",
+            {"Content-Type": "application/json"},
+            BytesIO(json.dumps({"error": {"message": "SECRET-USER-TEXT", "code": "other"}}).encode()),
+        )
+        with (patch.dict(os.environ, ENV, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=error)):
+            result = self.query()
+        self.assertEqual(result["failures"][0]["response_kind"], "json")
+        self.assertNotIn("code", result["failures"][0])
+        self.assertNotIn("SECRET-USER-TEXT", str(result))
+
     def test_401_invalid_key_not_retried(self):
         error = urllib.error.HTTPError("https://api.groq.com", 401, "invalid", None, None)
         with (patch.dict(os.environ, ENV, clear=True),

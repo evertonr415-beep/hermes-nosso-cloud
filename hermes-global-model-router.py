@@ -211,7 +211,10 @@ def run(payload):
                 ),
                 "stream": False,
             }
-            headers = {"Content-Type": "application/json"}
+            headers = {"Content-Type": "application/json", "Accept": "application/json"}
+            # Normal API client identification, not a bypass of access controls.
+            if p["id"] == "groq-free":
+                headers["User-Agent"] = "HermesCloud/1.0"
             if key:
                 headers["Authorization"] = "Bearer " + key
             req = urllib.request.Request(
@@ -238,19 +241,34 @@ def run(payload):
                     }
                 except urllib.error.HTTPError as exc:
                     status = exc.code
-                    # For 403, Groq may report an organization/project model
-                    # permission block. Read only an allowlisted machine error
-                    # code: never display raw provider messages, tokens or URLs.
+                    # Only classify the response shape and allowlisted machine
+                    # codes. Never propagate provider bodies, credentials or prompts.
                     safe_code = None
+                    response_kind = None
                     if p["id"] == "groq-free" and status == 403:
                         try:
-                            response_error = json.loads(exc.read(2048)).get("error", {})
-                            if isinstance(response_error, dict):
-                                code = response_error.get("code")
-                                if code in ("model_permission_blocked_org", "model_permission_blocked_project"):
-                                    safe_code = code
-                        except (ValueError, OSError, TypeError, AttributeError):
-                            pass
+                            content_type = str((exc.headers or {}).get("Content-Type", "")).lower()
+                            response_bytes = exc.read(2048)
+                            if not isinstance(response_bytes, bytes):
+                                response_bytes = b""
+                            body = response_bytes.lstrip().lower()
+                            if "text/html" in content_type or body.startswith((b"<!doctype html", b"<html")):
+                                response_kind = "html"
+                            elif not response_bytes:
+                                response_kind = "empty"
+                            else:
+                                try:
+                                    parsed = json.loads(response_bytes)
+                                    response_kind = "json" if isinstance(parsed, dict) else "other"
+                                    error = parsed.get("error", {}) if isinstance(parsed, dict) else {}
+                                    if isinstance(error, dict):
+                                        code = error.get("code")
+                                        if code in ("model_permission_blocked_org", "model_permission_blocked_project"):
+                                            safe_code = code
+                                except (ValueError, UnicodeError, TypeError):
+                                    response_kind = "other"
+                        except (OSError, AttributeError, TypeError):
+                            response_kind = "unknown"
                     # These errors may be a model/provider routing mismatch.
                     # At most one alternate live Qwen model is tried.
                     if is_hf and status in (400, 404, 422):
@@ -270,6 +288,8 @@ def run(payload):
                     }
                     if safe_code:
                         failure["code"] = safe_code
+                    if response_kind is not None:
+                        failure["response_kind"] = response_kind
                     failures.append(failure)
                     # Never retry auth failures or payment/quota errors by
                     # moving to another model or provider.

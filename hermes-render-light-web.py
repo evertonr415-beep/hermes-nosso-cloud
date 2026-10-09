@@ -80,8 +80,14 @@ def chat_via_global_router(payload):
                     public_message = "Groq HTTP 403: modelo bloqueado na organização. Em GroqCloud, abra Settings > Organization > Limits."
                 elif "model_permission_blocked_project" in details:
                     public_message = "Groq HTTP 403: modelo bloqueado no projeto. Em GroqCloud, abra Settings > Projects > Limits."
+                elif any(f.get("response_kind") == "html" for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta HTML recebida. Possível recusa por gateway/proteção de rede antes da inferência; confira o provedor e o tráfego do Render."
+                elif any(f.get("response_kind") in ("other", "empty") for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta não-JSON ou vazia. Pode ser bloqueio intermediário na conexão de saída do Render."
+                elif any(f.get("response_kind") == "json" for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta JSON da API, sem código conhecido de bloqueio de modelo. Consulte as permissões e o suporte da Groq."
                 else:
-                    public_message = "Groq HTTP 403: acesso negado. Verifique as permissões do modelo no projeto/organização e o estado da conta Groq."
+                    public_message = "Groq HTTP 403: acesso negado sem detalhe classificável. Confira logs do Render."
             elif 429 in statuses:
                 public_message = "O limite de chamadas gratuitas da Groq foi atingido (HTTP 429). Aguarde."
             elif any(s in (400, 404, 422) for s in statuses):
