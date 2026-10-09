@@ -117,3 +117,39 @@ O recurso avançado pode ser desativado no Render com
 que o modo avançado já foi implantado nem que todas as ferramentas do
 Hermes original estejam disponíveis no Render. A memória criptografada do
 Supabase requer validação e autorização específicas antes de ser lida.
+
+## Ajustes de apresentação e validação das ferramentas (09/10/2026)
+
+O chat simples e o modo **Avançado · raciocínio + ferramentas** continuam usando
+GroqCloud Free. A interface corrige rolagem horizontal no celular, evita
+estouro de largura na seleção de modelo e formata Markdown básico
+(`**negrito**` e código entre crases) após escapar HTML potencialmente
+perigoso. O resultado `**2000**` é exibido visualmente como texto em negrito.
+
+O serviço apresenta **"🔧 N ferramenta(s) executada(s)"** somente quando o
+módulo do agente confirma ao servidor que houve chamadas reais de ferramentas.
+Uma conta feita diretamente pelo modelo não gera esse indicador.
+
+Ferramentas disponíveis no modo avançado:
+- `calculate`: cálculo seguro por AST, sem `eval` ou shell.
+- `current_time`: data e horário com fuso permitido.
+- `wikipedia_search`: busca limitada na API pública da Wikipédia.
+
+Validação offline: `python -m unittest discover -s tests -p 'test_light_agent.py' -v`
+e `python -m unittest discover -s tests -p 'test_advanced_ui.py' -v`.
+O GitHub Actions também executa esses arquivos e confirma sintaxe do
+JavaScript pelo Node.js, quando instalado. As chamadas à Wikipédia são
+simuladas nos testes para não depender de acesso externo.
+
+**Verificação real após o deploy:** em modo Avançado, peça
+"Use a calculadora e calcule (125+375)*4", consulte o horário
+"Qual é a hora atual em São Paulo? Use a ferramenta de horário",
+e pesquise "Pesquise Arapongas na Wikipédia". Quando houver chamada real,
+o indicador de ferramentas aparecerá no texto da conversa.
+A ausência do indicador significa que o modelo pode ter respondido sozinho.
+Evite qualquer dado confidencial na pesquisa pública.
+
+A memória privada criptografada do Supabase permanece fora do chat leve.
+Não foram habilitados novos acessos a arquivos, alterações de infraestrutura,
+ações externas ou serviços pagos. Nenhuma garantia de sucesso em produção
+é feita sem testar o último build do Render.
