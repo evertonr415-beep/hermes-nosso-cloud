@@ -145,7 +145,10 @@ def state_save(data):
 
 def synchronize():
     if not configuration_ok():
-        print("[hermes-memory] disabled: protected configuration incomplete", flush=True)
+        print("[hermes-memory] disabled: token_valid=%s key_valid=%s url_valid=%s" % (
+            bool(re.fullmatch(r"[0-9a-fA-F]{64}", TOKEN or "")),
+            bool(re.fullmatch(r"[0-9a-fA-F]{64}", HEXKEY or "")),
+            API == "https://aufsewqtybpothlrsjij.supabase.co/functions/v1/hermes-global-memory"),flush=True)
         return False
     paths = find_memory_files()
     state = state_load()
