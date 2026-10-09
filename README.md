@@ -82,3 +82,38 @@ O modo Groq não faz chamadas ao Hugging Face nem à Vireonix. Não usa o HF_TOK
 O texto da mensagem é processado pela Groq. O modo leve não lê memória criptografada do Supabase nem envia chaves da plataforma. Evite incluir dados confidenciais.
 
 Fontes oficiais: https://console.groq.com/docs/openai e https://console.groq.com/docs/rate-limits .
+
+## Hermes Avançado: raciocínio e ferramentas opcionais
+
+O Render mantém **Groq grátis · Qwen 27B** como chat padrão. Há também
+**Avançado · raciocínio + ferramentas**, selecionado manualmente no menu.
+Ambos utilizam a mesma conta GroqCloud Free, sem habilitar faturamento.
+
+O modo avançado usa `qwen/qwen3.8-27b` com `reasoning_effort=high`,
+`reasoning_format=hidden` e até 1.400 tokens de resposta por etapa.
+Se a variável `HERMES_GROQ_MODEL` selecionar `openai/gpt-oss-20b`,
+usa `reasoning_effort=medium`. O modelo nunca é alterado para outro
+provedor pago silenciosamente.
+
+O agente implementa somente três ferramentas reais de leitura:
+* `calculate`: cálculo aritmético em AST com limites de complexidade e magnitude;
+* `current_time`: hora oficial da instância em UTC ou America/Sao_Paulo;
+* `wikipedia_search`: pesquisa limitada à API pública da Wikipédia em português/inglês.
+
+O ciclo de ferramentas tem no máximo 3 rodadas de inferência e 4 chamadas de
+ferramentas, todas com tempo limite. Não há funções de shell, comandos arbitrários,
+acesso a arquivos locais, automação de navegadores, alteração no GitHub/Supabase,
+envio de mensagens ou leitura de memória criptografada nesse modo.
+O modelo pode solicitar ferramentas, mas apenas as funções declaradas
+e implementadas são executadas.
+
+**Segurança:** pedidos e resultados passam pela Groq; consultas à Wikipédia
+são transmitidas à Wikimedia, então não envie segredos ou dados pessoais.
+Saídas de pesquisa são consideradas dados não confiáveis, jamais instruções.
+O recurso avançado pode ser desativado no Render com
+`HERMES_AGENT_TOOLS_ENABLED=0`. O chat básico é mantido sem mudanças.
+
+**Estado:** código adicionado ao GitHub com testes offline. Isso não comprova
+que o modo avançado já foi implantado nem que todas as ferramentas do
+Hermes original estejam disponíveis no Render. A memória criptografada do
+Supabase requer validação e autorização específicas antes de ser lida.
