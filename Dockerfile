@@ -186,7 +186,7 @@ RUN test -f /opt/hermes/skills/autonomous-ai-agents/hermes-nosso-router/SKILL.md
 
 # Lightweight S3 client for private Railway bucket backups plus the distro
 # cryptography library used only to derive the private executor SSH identity.
-RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography python3-yaml git curl jq socat \
+RUN apt-get -o Acquire::Retries=3 update && apt-get -o Acquire::Retries=3 install -y --no-install-recommends python3-boto3 python3-cryptography python3-yaml python3-bs4 git curl jq socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Vercel Sandbox SDK is lazy-installed by Hermes itself through its managed
@@ -239,10 +239,11 @@ COPY hermes-render-light-web.py /usr/local/bin/hermes-render-light-web
 COPY hermes-light-agent.py /usr/local/bin/hermes-light-agent
 COPY hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
 COPY hermes-groq-catalog-monitor.py /usr/local/bin/hermes-groq-catalog-monitor
+COPY hermes-infra-audit.py /usr/local/bin/hermes-infra-audit
 COPY hermes-spaces-port-run.sh /hermes-spaces-port-run.sh
 RUN chmod 0755 /hermes-spaces-port-run.sh /usr/local/bin/hermes-render-light-web \
     && /bin/bash -n /hermes-spaces-port-run.sh \
-    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-render-light-web /usr/local/bin/hermes-light-agent /usr/local/bin/hermes-memory-recovery /opt/hermes-render/hermes-simple.py
+    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-render-light-web /usr/local/bin/hermes-light-agent /usr/local/bin/hermes-memory-recovery /usr/local/bin/hermes-infra-audit /opt/hermes-render/hermes-simple.py
 ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT []
