@@ -6,6 +6,28 @@ set -eu
 RUNTIME_UID="${HERMES_RUNTIME_UID:-10000}"
 RUNTIME_GID="${HERMES_RUNTIME_GID:-10000}"
 
+# Make gateway logs writable before the unprivileged s6 gateway starts.
+# These directories may be replaced by a host-mounted /opt/data at runtime,
+# so Dockerfile ownership alone is insufficient in that situation.
+# Do not chmod all of /opt: sensitive keys and config must remain private.
+for dir in /opt/data/logs /opt/data/logs/gateways; do
+  if [ ! -d "$dir" ]; then
+    mkdir -p "$dir" 2>/dev/null || true
+  fi
+  if [ -d "$dir" ]; then
+    chown "$RUNTIME_UID:$RUNTIME_GID" "$dir" 2>/dev/null || true
+    chmod 0750 "$dir" 2>/dev/null || true
+  fi
+done
+
+# Ephemeral caches and optional logs live on /tmp, never in a protected
+# system directory. Restrict these to the Hermes gateway identity.
+for dir in /tmp/hermes-runtime-logs /tmp/hermes-runtime-cache; do
+  mkdir -p "$dir" 2>/dev/null || true
+  chown "$RUNTIME_UID:$RUNTIME_GID" "$dir" 2>/dev/null || true
+  chmod 0700 "$dir" 2>/dev/null || true
+done
+
 # Keep the persistent volume healthy without touching user data. Hermes can
 # generate very large rotating logs and transient SQLite journal files; when the
 # 500 MB Railway volume fills, /v1/responses fails even though the model itself

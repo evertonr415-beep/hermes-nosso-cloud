@@ -1,6 +1,14 @@
 FROM nousresearch/hermes-agent:latest
 
+# Build as root, but grant the Hermes gateway's unprivileged uid 10000
+# access only to its own mutable state/log directories (never chmod 777 /opt).
 USER root
+ENV TMPDIR=/tmp
+RUN install -d -o 10000 -g 10000 -m 0755 /opt/data \
+    && install -d -o 10000 -g 10000 -m 0750 /opt/data/logs \
+    && install -d -o 10000 -g 10000 -m 0750 /opt/data/logs/gateways \
+    && install -d -o 10000 -g 10000 -m 0700 /tmp/hermes-runtime-logs \
+    && install -d -o 10000 -g 10000 -m 0700 /tmp/hermes-runtime-cache
 
 ENV NPM_CONFIG_CACHE=/tmp/npm-cache
 ENV PATH="/opt/hermes/.venv/bin:/usr/local/bin:/usr/bin:/bin"
