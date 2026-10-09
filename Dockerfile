@@ -134,6 +134,13 @@ COPY global-distributed-ai-cloud-architecture/SKILL.md /opt/hermes/skills/cloud/
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/global-decentralized-inference-orchestrator
 COPY global-decentralized-inference-orchestrator/SKILL.md /opt/hermes/skills/autonomous-ai-agents/global-decentralized-inference-orchestrator/SKILL.md
 
+# Optional, bounded HTTPS inference router; fails closed until its owner explicitly enables providers.
+RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/hermes-worldwide-model-router
+COPY hermes-global-model-router.py /usr/local/bin/hermes-global-model-router
+COPY hermes-worldwide-model-router/SKILL.md /opt/hermes/skills/autonomous-ai-agents/hermes-worldwide-model-router/SKILL.md
+RUN chmod 0755 /usr/local/bin/hermes-global-model-router
+
+
 # Re-copy the original custom bundle only for an exact build-time count.
 COPY custom-skills.tar.gz.b64 /tmp/custom-skills-audit.b64
 RUN base64 -d /tmp/custom-skills-audit.b64 | tar -tzf - | grep -c 'SKILL.md' > /opt/hermes/hermes-nosso-bundle-count.txt \
