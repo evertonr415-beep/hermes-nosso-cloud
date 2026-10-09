@@ -115,10 +115,10 @@ if hf_token.startswith("hf_") and len(hf_token) >= 23:
         )
         probe = json.loads(test.stdout.strip() or "{}")
         if test.returncode == 0 and probe.get("ok") is True and probe.get("provider") == "huggingface-official":
-            allowed = {"Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
-            hf_model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+            allowed = {"Qwen/Qwen3-4B-Instruct-2507", "Qwen/Qwen2.5-7B-Instruct-1M", "Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct"}
+            hf_model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen3-4B-Instruct-2507")
             model["provider"] = "hf"
-            model["default"] = hf_model if hf_model in allowed else "Qwen/Qwen2.5-7B-Instruct"
+            model["default"] = hf_model if hf_model in allowed else "Qwen/Qwen3-4B-Instruct-2507"
             print("[hf-official] preflight passed; Hermes Cloud default switched to HF", flush=True)
         else:
             print("[hf-official] preflight unavailable error=%s failures=%s; existing primary chat retained" % (str(probe.get("error","unknown"))[:48], str(probe.get("failures",[]))[:280]),flush=True)
@@ -155,6 +155,8 @@ providers["hf"] = {
     "key_env": "HF_TOKEN",
     "transport": "chat_completions",
     "models": {
+        "Qwen/Qwen3-4B-Instruct-2507": {},
+        "Qwen/Qwen2.5-7B-Instruct-1M": {},
         "Qwen/Qwen2.5-7B-Instruct": {},
         "Qwen/Qwen2.5-14B-Instruct": {},
     },

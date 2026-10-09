@@ -68,8 +68,14 @@ def chat_via_global_router(payload):
             public_message = "Hugging Face recusou a inferência (HTTP 402): verifique créditos e faturamento da conta."
         elif 401 in statuses or 403 in statuses:
             public_message = "Hugging Face recusou a autenticação (HTTP 401/403): verifique o HF_TOKEN e as permissões."
-        elif 404 in statuses or 422 in statuses or 400 in statuses:
-            public_message = "O modelo Qwen não está disponível para esta rota de inferência (HTTP 400/404/422)."
+        elif any(s in (400, 404, 422) for s in statuses):
+            exact = statuses[-1]
+            model = failures[-1].get("model", "Qwen") if failures else "Qwen"
+            # Safe: model comes from a fixed allowlist, never a freeform
+            # provider response or user-supplied text.
+            public_message = ("Hugging Face rejeitou a rota do modelo (" +
+                              str(model) + ", HTTP " + str(exact) +
+                              "). Consulte a lista oficial de modelos ativos." )
         elif 429 in statuses:
             public_message = "Hugging Face está limitando as requisições (HTTP 429). Tente novamente mais tarde."
         elif any(s in (408,500,502,503,504) for s in statuses) or any(e in ("TimeoutError","URLError") for e in errors):
@@ -78,6 +84,9 @@ def chat_via_global_router(payload):
             public_message = "O roteador de IA está desativado nas configurações do servidor."
         elif result.get("error") == "no_authorized_healthy_backends":
             public_message = "Não há provedor de IA disponível. Verifique o token e o modelo configurados."
+        elif any(f.get("error") == "no_live_qwen_models" for f in failures if isinstance(f, dict)):
+            public_message = "Nenhum modelo Qwen ativo foi encontrado no catálogo oficial do Hugging Face."
+
         else:
             public_message = "O provedor de IA não retornou resposta. Verifique os logs do Hermes."
         raise ModelUnavailable(public_message)

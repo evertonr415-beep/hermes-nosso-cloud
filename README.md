@@ -22,7 +22,7 @@ Este repositório mantém o **Hermes Cloud** (agente e gateway) e sua **interfac
    - `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD` / demais configurações de acesso exigidas pelo Hermes;
    - `HERMES_MEMORY_AES_KEY`, `HERMES_MEMORY_SYNC_TOKEN`, `HERMES_MEMORY_SYNC_URL` se quiser restaurar a sincronização privada de memória Supabase com as **mesmas chaves antigas**;
    - Demais credenciais de integrações que você efetivamente usar.
-4. Variáveis não secretas recomendadas: `HERMES_GLOBAL_ROUTER_ENABLED=1`, `HERMES_GLOBAL_KEYLESS_ALLOW=0`, `HERMES_HF_MODEL=Qwen/Qwen2.5-7B-Instruct`. Alternativa: `Qwen/Qwen2.5-14B-Instruct`.
+4. Variáveis não secretas recomendadas: `HERMES_GLOBAL_ROUTER_ENABLED=1`, `HERMES_GLOBAL_KEYLESS_ALLOW=0`, `HERMES_HF_MODEL=Qwen/Qwen3-4B-Instruct-2507`. Alternativa: `Qwen/Qwen2.5-14B-Instruct`.
 5. O Space deve publicar a **porta 8080**. Internamente, o gateway/interface do Hermes continua atendendo na porta 9119, com um encaminhamento `socat` habilitado automaticamente por `SPACE_ID`.
 
 ## Modelo de IA e limites reais
@@ -49,3 +49,11 @@ Guia oficial: https://huggingface.co/docs/hub/spaces-sdks-docker
 O modo leve usa a porta `8080` e o modelo `Qwen/Qwen2.5-7B-Instruct` por padrão, sem depender do `s6-overlay` para servir a interface. A alternativa é `Qwen/Qwen2.5-14B-Instruct`, selecionável em `HERMES_HF_MODEL`. Configurar `HF_TOKEN` como segredo no **Render → Environment** (com permissão *Make calls to Inference Providers*) é obrigatório para obter respostas do modelo.
 
 O roteador tenta no máximo duas vezes quando ocorre timeout, limitação temporária de requisições ou indisponibilidade do provedor. **HTTP 401, 402 e 403 não são repetidos**: o chat apresenta um aviso específico, pois trocar o modelo não corrige problemas de credenciais, permissão ou créditos. A página `/health` indica apenas que o servidor está de pé, não que a API do Hugging Face está respondendo.
+
+## Correção de compatibilidade com Inference Providers
+
+O Hermes usa o catálogo oficial `GET https://router.huggingface.co/v1/models` para reconhecer modelos de chat com provedor em estado `live`, com cache de 10 minutos. O padrão de preferência é `Qwen/Qwen3-4B-Instruct-2507`, seguido por modelos Qwen2.5 que constem como disponíveis no catálogo. Para o Qwen3, quando o catálogo confirma `nscale`, a rota utiliza explicitamente `:nscale`.
+
+Se o modelo escolhido for rejeitado com HTTP 400, 404 ou 422, será tentado **no máximo mais um modelo Qwen listado como ativo**. Erros HTTP 401, 402, 403 e 429 não provocam mudança de modelo ou cobrança adicional. O chat mostra o código HTTP exato e o identificador do modelo utilizado, sem mostrar segredos.
+
+O endpoint `/health` confirma apenas que o servidor web iniciou. Ele não prova que o acesso ao modelo, os créditos de inferência ou a memória do Supabase estejam funcionando. Serviços do Hugging Face podem exigir créditos mesmo para modelos open source.
