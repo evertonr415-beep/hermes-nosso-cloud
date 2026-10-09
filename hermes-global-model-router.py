@@ -249,7 +249,7 @@ def run(payload):
                                 code = response_error.get("code")
                                 if code in ("model_permission_blocked_org", "model_permission_blocked_project"):
                                     safe_code = code
-                        except (ValueError, OSError, TypeError):
+                        except (ValueError, OSError, TypeError, AttributeError):
                             pass
                     # These errors may be a model/provider routing mismatch.
                     # At most one alternate live Qwen model is tried.
