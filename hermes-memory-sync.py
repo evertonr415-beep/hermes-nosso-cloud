@@ -25,8 +25,8 @@ FILES = ("MEMORY.md", "USER.md")
 API = os.environ.get("HERMES_MEMORY_SYNC_URL", "").strip()
 TOKEN = os.environ.get("HERMES_MEMORY_SYNC_TOKEN", "").strip()
 HEXKEY = os.environ.get("HERMES_MEMORY_AES_KEY", "").strip()
-CHUNK = 16000
-MAX_FILE_BYTES = 256000
+CHUNK = 8000
+MAX_FILE_BYTES = 128000
 MAX_DEPTH = 6
 IGNORED = {".git", "node_modules", ".cache", "cache", "backups", "backup", "plugins",
            "skills", "tmp", "temp", "venv", ".venv", "dist", "build", "trash"}
