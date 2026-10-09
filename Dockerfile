@@ -240,3 +240,7 @@ EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/hermes-railway-entrypoint"]
 CMD ["sleep", "infinity"]
+
+# Render diagnostic mode: explicit container startup identity. s6 may still
+# switch individual services to Hermes uid 10000 via its own supervision.
+USER root

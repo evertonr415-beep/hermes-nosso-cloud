@@ -1,5 +1,7 @@
 #!/command/with-contenv sh
 set -eu
+# Requested startup safeguard. Note: s6-log starts before this s6 service.
+mkdir -p /opt/data/logs/gateways
 # Platform-agnostic temporary storage for ephemeral diagnostics/cache.
 # socat logs to stderr (captured by Render/Spaces), never /opt/data/logs.
 export TMPDIR=/tmp

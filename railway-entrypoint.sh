@@ -2,6 +2,11 @@
 set -eu
 
 mkdir -p /opt/data
+# Must run BEFORE entrypoint-dispatch launches s6 and s6-log.
+# Allow uid 10000, used by supervised Hermes services, to create log files.
+mkdir -p /opt/data/logs/gateways
+chown 10000:10000 /opt/data/logs /opt/data/logs/gateways
+chmod 0750 /opt/data/logs /opt/data/logs/gateways
 
 rm -rf /opt/data/smoke
 rm -f /opt/data/workspace/hermes-smoke-file.txt
