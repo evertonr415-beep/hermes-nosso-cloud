@@ -20,6 +20,7 @@ on:
       - "tests/test_advanced_ui.py"
       - "hermes-simple.py"
       - "Dockerfile"
+      - "tests/test_memory_chat.py"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -53,6 +54,8 @@ jobs:
       - name: Test read-only advanced agent
         run: |
           python -m unittest discover -s tests -p 'test_light_agent.py' -v
+      - name: Check memory consent
+        run: python -m unittest discover -s tests -p test_memory_chat.py -v
       - name: Check Advanced sidebar and browser JavaScript
         run: |
           python -m unittest discover -s tests -p 'test_advanced_ui.py' -v
