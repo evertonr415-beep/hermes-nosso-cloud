@@ -246,8 +246,12 @@ def call_public_deepseek(prompt):
         raise ValueError("Resposta pública inválida")
     return answer
 
+HF_BLOCKED_UNTIL = 0.0
 def hf_official_chat(prompt):
     """Official Hugging Face endpoint for ordinary text; HTTPS + bounded output."""
+    global HF_BLOCKED_UNTIL
+    if time.time() < HF_BLOCKED_UNTIL:
+        raise RuntimeError("hf_provider_cooldown")
     token=os.getenv("HF_TOKEN","").strip()
     if not token.startswith("hf_") or len(token)<23:
         raise RuntimeError("HF_TOKEN not configured")
@@ -260,8 +264,13 @@ def hf_official_chat(prompt):
     req=urllib.request.Request("https://router.huggingface.co/v1/chat/completions",
         data=body,method="POST",headers={"Authorization":"Bearer "+token,
         "Content-Type":"application/json","Accept":"application/json"})
-    with urllib.request.urlopen(req,timeout=14) as resp:
-        result=json.loads(resp.read(2*1024*1024))
+    try:
+        with urllib.request.urlopen(req,timeout=14) as resp:
+            result=json.loads(resp.read(2*1024*1024))
+    except urllib.error.HTTPError as error:
+        if error.code in (401,402,403,429):
+            HF_BLOCKED_UNTIL=time.time()+(3600 if error.code==402 else 300)
+        raise
     answer=result["choices"][0]["message"]["content"]
     if not isinstance(answer,str) or not answer.strip():
         raise ValueError("Empty provider response")
@@ -529,7 +538,7 @@ class Handler(BaseHTTPRequestHandler):
             # Once HF_TOKEN is supplied in Railway Shared Variables, route normal
             # text chat to official HF. Execution/media/tool tasks retain bridge.
             if route=="auto" and not attachment_id and 0<len(text)<=8000 and classify_route(text,route).get("category")=="Geral":
-                if os.getenv("HF_TOKEN","").startswith("hf_"):
+                if os.getenv("HF_TOKEN","").startswith("hf_") and time.time()>=HF_BLOCKED_UNTIL:
                     try:
                         hf_text,hf_model=hf_official_chat(text)
                         return self.sendb(200,json.dumps({"text":hf_text,"via":"huggingface-official",
