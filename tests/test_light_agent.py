@@ -66,6 +66,68 @@ class AdvancedTests(unittest.TestCase):
         self.assertEqual(res["response"],"O resultado é 5.")
         self.assertIn('"result": 5',send.call_args_list[1].args[0][-1]["content"])
 
+    def test_explicit_sao_paulo_and_wikipedia_requests_call_tools_without_model(self):
+        prompt="consulte o horário de São Paulo e pesquisar Arapongas na Wikipédia."
+        invoked=[]
+        def fake(name, arguments):
+            params=json.loads(arguments)
+            invoked.append((name,params))
+            if name=="current_time":
+                return {"local_time":"2026-10-09T13:50:00-03:00"}
+            if name=="wikipedia_search":
+                return {"results":[{"title":"Arapongas","snippet":"Município do Paraná",
+                                    "url":"https://pt.wikipedia.org/wiki/Arapongas"}]}
+            self.fail("unexpected tool "+str(name))
+        with patch.dict(agent.os.environ,ENV,clear=True), \
+             patch.object(agent,"run_tool",side_effect=fake), \
+             patch.object(agent,"completion") as model:
+            result=agent.answer(prompt)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tools_used"],2)
+        self.assertEqual([x[0] for x in invoked],["current_time","wikipedia_search"])
+        self.assertEqual(invoked[1][1]["query"],"Arapongas")
+        self.assertIn("2026-10-09T13:50",result["response"])
+        self.assertIn("https://pt.wikipedia.org/wiki/Arapongas",result["response"])
+        model.assert_not_called()
+
+    def test_wikipedia_failure_does_not_invent_city_facts(self):
+        with patch.dict(agent.os.environ,ENV,clear=True), \
+             patch.object(agent,"run_tool",return_value={"error":"network_unavailable"}), \
+             patch.object(agent,"completion") as model:
+            result=agent.answer("Pesquise Arapongas na Wikipédia")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tools_used"],0)
+        self.assertIn("Não foi possível",result["response"])
+        self.assertNotIn("fundação",result["response"].lower())
+        model.assert_not_called()
+
+    def test_explicit_calculator_must_use_calculator_tool(self):
+        prompt="Use a calculadora para calcular (125+375)×4."
+        with patch.dict(agent.os.environ,ENV,clear=True), \
+             patch.object(agent,"completion") as model:
+            result=agent.answer(prompt)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tools_used"],1)
+        self.assertIn("2000",result["response"])
+        model.assert_not_called()
+
+    def test_general_advanced_question_remains_model_driven(self):
+        with patch.dict(agent.os.environ,ENV,clear=True), \
+             patch.object(agent,"completion",return_value={"content":"Uma explicação."}) as model:
+            result=agent.answer("Explique o que é um banco de dados relacional")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["tools_used"],0)
+        model.assert_called_once()
+
+    def test_wikipedia_result_contains_generated_article_url(self):
+        from unittest.mock import MagicMock
+        body=json.dumps({"query":{"search":[{"title":"Arapongas","snippet":"Cidade do Paraná"}]}}).encode()
+        response=MagicMock()
+        response.__enter__.return_value.read.return_value=body
+        with patch.object(agent.urllib.request,"urlopen",return_value=response):
+            result=agent.run_tool("wikipedia_search",'{"query":"Arapongas","language":"pt"}')
+        self.assertEqual(result["results"][0]["url"],"https://pt.wikipedia.org/wiki/Arapongas")
+
     def test_plain_message(self):
         with patch.dict(agent.os.environ,ENV,clear=True),patch.object(agent,"completion",return_value={"content":"OK"}):
             self.assertEqual(agent.answer("OK")["response"],"OK")
