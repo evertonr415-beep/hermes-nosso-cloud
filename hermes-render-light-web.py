@@ -18,7 +18,7 @@ import time
 SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
-CATALOG_PATH = "/usr/local/bin/hermes-groq-catalog-monitor"
+CATALOG_PATH = os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py") if os.path.isfile(os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py")) else "/usr/local/bin/hermes-groq-catalog-monitor"
 MEMORY_PATH = os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py") if os.path.exists(os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py")) else "/usr/local/bin/hermes-memory-recovery"
 
 def load_module(name, path):
