@@ -158,6 +158,12 @@ def chat_via_global_router(payload):
         "type": "message",
         "content": [{"type":"output_text","text":result["response"]}]
     }]}
+    # Only a real, completed advanced function call increments the counter.
+    # Do not label arithmetic generated solely by the model as tool execution.
+    if payload.get("route") == "advanced" and result.get("provider") == "groq-free-advanced":
+        count = result.get("tools_used", 0)
+        if type(count) is int and 0 <= count <= 4:
+            output["hermes_tools_used"] = count
     return output, result.get("provider", "groq-free")
 
 simple.call_upstream = chat_via_global_router
