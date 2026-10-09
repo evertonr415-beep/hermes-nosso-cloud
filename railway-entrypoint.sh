@@ -44,7 +44,7 @@ p = Path("/opt/data/.env")
 lines = p.read_text(encoding="utf-8").splitlines() if p.exists() else []
 
 updates = {}
-for name in ("OPENAI_API_KEY", "API_SERVER_KEY"):
+for name in ("OPENAI_API_KEY", "API_SERVER_KEY", "HF_TOKEN"):
     value = os.environ.get(name, "").strip()
     if value:
         updates[name] = value
@@ -95,9 +95,32 @@ model = data.setdefault("model", {})
 if not isinstance(model, dict):
     model = {}
     data["model"] = model
-# Prefer the model that has been answering successfully.
+# Fail-safe activation: only switch primary provider when an official authenticated
+# inference call succeeds. Keeping the prior working chat is intentional if the
+# token is absent/expired, the model unavailable, or free credits are exhausted.
+import os, json, subprocess
 model["provider"] = "openai-codex"
 model["default"] = "gpt-5.6-sol"
+hf_token = os.getenv("HF_TOKEN", "").strip()
+if hf_token.startswith("hf_") and len(hf_token) >= 23:
+    try:
+        test = subprocess.run(
+            ["/usr/local/bin/hermes-global-model-router", "--probe"],
+            capture_output=True, text=True, timeout=17, check=False,
+        )
+        probe = json.loads(test.stdout.strip() or "{}")
+        if test.returncode == 0 and probe.get("ok") is True and probe.get("provider") == "huggingface-official":
+            allowed = {"Qwen/Qwen2.5-72B-Instruct", "meta-llama/Meta-Llama-3.1-8B-Instruct", "Qwen/Qwen2.5-7B-Instruct-1M"}
+            hf_model = os.getenv("HERMES_HF_MODEL", "Qwen/Qwen2.5-72B-Instruct")
+            model["provider"] = "hf"
+            model["default"] = hf_model if hf_model in allowed else "Qwen/Qwen2.5-72B-Instruct"
+            print("[hf-official] preflight passed; Hermes Cloud default switched to HF", flush=True)
+        else:
+            print("[hf-official] preflight unavailable; existing primary chat retained", flush=True)
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        print("[hf-official] preflight failed; existing primary chat retained", flush=True)
+else:
+    print("[hf-official] no valid HF_TOKEN; existing primary chat retained", flush=True)
 model["persist_switch_by_default"] = True
 data["fallback_providers"] = []
 agent_cfg = data.setdefault("agent", {})
