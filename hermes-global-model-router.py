@@ -87,6 +87,48 @@ def search_supabase_vectors(query_embedding, *, rpc_name=None, access_token=None
         raise ValueError("vector_search_unavailable") from None
 
 
+
+def compact_retrieved_memory(query, passages, *, max_items=5, max_chars=1800):
+    """Rank and deduplicate already-authorized, decrypted memory excerpts.
+
+    This is conservative lexical ranking, not a semantic-vector DB query.
+    Never fetches plaintext itself and never bypasses consent/authorization.
+    """
+    if not isinstance(query, str) or not isinstance(passages, (list, tuple)):
+        return []
+    max_items = min(5, max(1, int(max_items)))
+    max_chars = min(2400, max(128, int(max_chars)))
+    tokens = set(re.findall(r"[^\\W_]{3,}", query.casefold()))
+    seen = set()
+    ranked = []
+    for passage in passages[:64]:
+        if not isinstance(passage, str):
+            continue
+        for line in passage.splitlines()[:100]:
+            clean = " ".join(line.split())
+            if not 8 <= len(clean) <= 1000:
+                continue
+            if re.search(r"(?i)(?:api[_-]?key|password|token|authorization|bearer)\\s*[:=]", clean):
+                continue
+            normalized = re.sub(r"\\W+", " ", clean.casefold()).strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            matches = tokens.intersection(re.findall(r"[^\\W_]{3,}", normalized))
+            score = len(matches) / max(1, len(tokens))
+            if score > 0:
+                ranked.append((score, clean))
+    ranked.sort(key=lambda x: -x[0])
+    result = []
+    total = 0
+    for _, line in ranked:
+        if len(result) >= max_items or total + len(line) > max_chars:
+            continue
+        result.append(line)
+        total += len(line)
+    return result
+
+
 def parse_live_models(body):
     """Return {model: [live_provider, ...]}, never use repository-only entries."""
     result = {}
