@@ -85,7 +85,10 @@ simple.HTML = simple.HTML.replace(
     'Groq Free: limites de uso diário.</div>', 1)
 simple.HTML = simple.HTML.replace(
     "input:text,route:$(\'#model\').value",
-    "input:text,route:$(\'#model\').value,use_memory:$(\'#use-memory\').checked", 1)
+    "input:text,route:$(\'#model\').value,use_memory:memoryConsent", 1)
+simple.HTML = simple.HTML.replace(
+    "try{\\n  const res=await fetch(\'/api/chat\'",
+    "const memoryConsent=$(\'#use-memory\').checked; $(\'#use-memory\').checked=false;\\n try{\\n  const res=await fetch(\'/api/chat\'", 1)
 
 
 def opt_in_memory_context(prompt, payload, mode):
