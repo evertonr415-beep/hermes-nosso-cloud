@@ -98,6 +98,7 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
         <option value="auto">Automático · GPT-6 Sol</option>
         <option value="matrix">Matrix</option>
         <option value="local">Hermes Local</option>
+        <option value="global-public">DeepSeek V4 · Público (sem chave)</option>
       </select>
       <span class="zerocost">Zero Cost Mode</span><div class="status" id="status">pronto · estável</div>
     </header>
@@ -223,6 +224,27 @@ def auth_ok(headers):
         return hmac.compare_digest(u, USER) and hmac.compare_digest(p, PASSWORD)
     except Exception:
         return False
+
+def call_public_deepseek(prompt):
+    """Explicit opt-in: forward only current public text, never user memory/history."""
+    if not isinstance(prompt,str) or not (1 <= len(prompt) <= 8000):
+        raise ValueError("Mensagem pública fora do limite")
+    url="https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/chat/completions"
+    body=json.dumps({
+        "model":"deepseek-ai/DeepSeek-V4-Flash-0731",
+        "messages":[{"role":"user","content":prompt}],
+        "temperature":0.6,
+        "max_tokens":768
+    },ensure_ascii=False).encode("utf-8")
+    req=urllib.request.Request(url,data=body,method="POST",headers={
+        "Content-Type":"application/json","Accept":"application/json"
+    })
+    with urllib.request.urlopen(req,timeout=35) as res:
+        obj=json.loads(res.read(4*1024*1024))
+    answer=obj["choices"][0]["message"]["content"]
+    if not isinstance(answer,str) or not answer.strip():
+        raise ValueError("Resposta pública inválida")
+    return answer
 
 def call_upstream(payload):
     """Use the isolated bridge as the single stable chat path."""
@@ -476,6 +498,13 @@ class Handler(BaseHTTPRequestHandler):
                 vid=generate_local_video(item["bytes"],item["mime"])
                 meta={"category":"Vídeo","skill":"video-local","provider":"Local · custo zero"}
                 return self.sendb(200,json.dumps({"text":"Vídeo criado localmente em 5 segundos, sem usar provider pago.","via":"local-ffmpeg","routeMeta":meta,"videoUrl":"/api/media/"+vid},ensure_ascii=False))
+            if route=="global-public":
+                if attachment_id:
+                    return self.sendb(400,json.dumps({"error":"A rota pública não aceita anexos ou histórico privado. Selecione Automático para isso."},ensure_ascii=False))
+                result=call_public_deepseek(text)
+                return self.sendb(200,json.dumps({"text":result,"via":"DeepSeek V4 Flash · público",
+                    "routeMeta":{"category":"IA pública","skill":"hermes-worldwide-model-router","provider":"DeepSeek V4 Flash · endpoint público"},
+                    "imageUrl":None},ensure_ascii=False))
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="matrix":
                 payload.update({"provider":"matrix","model":"claude-opus-5"})
