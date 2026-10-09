@@ -79,6 +79,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .bubble code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f1f2f4;padding:1px 4px;border-radius:4px}
 .bubble pre code{padding:0;background:transparent}
 .bubble strong{font-weight:700}
+.bubble a{color:#1c579f;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
 @media(max-width:760px){
   .app{grid-template-columns:minmax(0,1fr)}
   .topbar{padding:0 10px;gap:7px;width:100%;overflow:hidden}
@@ -136,15 +137,26 @@ function ensure(){
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function formatAnswer(s){
-  // Strictly escape all untrusted model text BEFORE adding limited Markdown.
+  // Escape user/model/tool output first; permit only narrowly defined safe markup.
   const parts=esc(s).split(/(```[\s\S]*?```)/g);
   return parts.map(part=>{
     if(part.startsWith('```') && part.endsWith('```')){
-      const body=part.slice(3,-3).replace(/^[^\n]*\n/,'');
-      return '<pre><code>'+body+'</code></pre>';
+      const code=part.slice(3,-3).replace(/^[^\n]*\n/,'');
+      return '<pre><code>'+code+'</code></pre>';
     }
-    return part.replace(/`([^`\n]+)`/g,'<code>$1</code>')
-      .replace(/\*\*([^\n*]+)\*\*/g,'<strong>$1</strong>');
+    let out=part
+      .replace(/\\times/g,'×').replace(/\\cdot/g,'·').replace(/\\div/g,'÷')
+      .replace(/\\\(/g,'').replace(/\\\)/g,'')
+      .replace(/\\\[/g,'').replace(/\\\]/g,'')
+      .replace(/\$\$/g,'');
+    // Only fixed public Wikipedia article links can become clickable HTML.
+    // Escaping happened before replacements. No arbitrary href or inline JS.
+    out=out.replace(/\[([^\]\n]{1,120})\]\((https:\/\/(?:pt|en)\.wikipedia\.org\/wiki\/[A-Za-z0-9_.%~!$&+,;=:@/-]+)\)/g,
+      (_match,label,url)=>'<a href="'+url+'" rel="noopener noreferrer" target="_blank">'+label+'</a>');
+    out=out.replace(/`([^`\n]+)`/g,'<code>$1</code>')
+      .replace(/\*\*([^\n*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/(^|\n)#{1,3}\s+([^\n]+)/g,'$1<strong>$2</strong>');
+    return out;
   }).join('');
 }
 function renderHistory(){
