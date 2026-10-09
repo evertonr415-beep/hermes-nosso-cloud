@@ -88,16 +88,24 @@ def _explicit_tool_requests(prompt):
         zone="UTC" if re.search(r"\butc\b",lower) and not re.search(r"s[aã]o paulo",lower) else "America/Sao_Paulo"
         tasks.append(("current_time",{"timezone":zone}))
     wiki=None
-    match=re.search(
-        r"\b(?:pesquis(?:ar|e|a)|busc(?:ar|a|que)|consult(?:ar|e)|procure)\s+"
-        r"(?:sobre\s+)?(.{2,100}?)\s+(?:na|no|pela|pelo)?\s*wikip[eé]dia\b",
-        request,re.IGNORECASE)
-    if match:
-        wiki=match.group(1).strip(" \n\t,.;:!?")
-    else:
-        match=re.search(r"\bwikip[eé]dia\s+(?:sobre|de|do|da)\s+([^\n,.;!?]{2,90})",request,re.IGNORECASE)
-        if match:
-            wiki=match.group(1).strip()
+    # Work backwards from the encyclopedia reference and use the FINAL
+    # search verb. A combined request such as "consulte o horário ... e
+    # pesquisar Arapongas na Wikipédia" must search only for Arapongas.
+    target=re.search(r"\bwikip[eé]dia\b",request,re.IGNORECASE)
+    if target:
+        preceding=request[:target.start()]
+        verb=list(re.finditer(
+            r"\b(?:pesquis(?:ar|e|a)|busc(?:ar|a|que)|consult(?:ar|e)|procure)\s+"
+            r"(?:sobre\s+)?",preceding,re.IGNORECASE))
+        if verb:
+            wiki=preceding[verb[-1].end():].strip(" \n\t,.;:!?")
+            wiki=re.sub(r"\s+(?:na|no|pela|pelo)\s*$","",wiki,flags=re.IGNORECASE)
+        else:
+            following=request[target.end():]
+            match=re.match(r"\s+(?:sobre|de|do|da)\s+([^\n,.;!?]{2,90})",
+                           following,re.IGNORECASE)
+            if match:
+                wiki=match.group(1).strip()
     if wiki:
         if len(wiki)>100: wiki=wiki[:100]
         language="en" if re.search(r"\b(?:em ingl[eê]s|english wikipedia)\b",lower) else "pt"
