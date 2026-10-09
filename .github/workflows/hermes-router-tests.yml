@@ -24,6 +24,7 @@ on:
       - "hermes-simple.py"
       - "Dockerfile"
       - "tests/test_memory_chat.py"
+      - "tests/test_memory_ranking.py"
   pull_request:
     branches: [main]
   workflow_dispatch:
