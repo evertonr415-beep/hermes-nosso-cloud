@@ -1,5 +1,6 @@
 """Offline privacy and regression checks for opt-in memory chat."""
 import ast
+import importlib.util
 import os
 from pathlib import Path
 import unittest
@@ -26,7 +27,10 @@ class MemoryChatTests(unittest.TestCase):
         tree = ast.parse(WEB)
         fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "opt_in_memory_context")
         self.memory = FakeMemory()
-        scope = {"os": os, "memory": self.memory}
+        spec = importlib.util.spec_from_file_location("memory_router_test", ROOT / "hermes-global-model-router.py")
+        router = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router)
+        scope = {"os": os, "memory": self.memory, "router": router}
         exec(compile(ast.Module(body=[fn], type_ignores=[]), "<memory_gate>", "exec"), scope)
         self.gate = scope["opt_in_memory_context"]
 
@@ -48,9 +52,9 @@ class MemoryChatTests(unittest.TestCase):
 
     def test_authorized_request_uses_bounded_context(self):
         with patch.dict(os.environ, {"HERMES_MEMORY_CHAT_ENABLED": "1"}):
-            result = self.gate("pergunta", {"use_memory": True}, "groq")
+            result = self.gate("Arapongas", {"use_memory": True}, "groq")
         self.assertIn("Lembrete sobre Arapongas", result)
-        self.assertTrue(result.endswith("pergunta"))
+        self.assertTrue(result.endswith("Arapongas"))
         self.assertEqual(self.memory.calls, ["MEMORY.md", "USER.md"])
 
     def test_deployment_wires_real_module(self):
