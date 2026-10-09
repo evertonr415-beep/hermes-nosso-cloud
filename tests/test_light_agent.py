@@ -21,6 +21,37 @@ class AdvancedTests(unittest.TestCase):
         self.assertIn("local_time",agent.run_tool("current_time",'{"timezone":"America/Sao_Paulo"}'))
         self.assertIn("error",agent.run_tool("current_time",'{"timezone":"Europe/London"}'))
 
+    def test_wikipedia_search_only_uses_fixed_public_host(self):
+        from unittest.mock import MagicMock
+        payload=json.dumps({"query":{"search":[
+            {"title":"Arapongas","snippet":"<span>Município</span> do Paraná"}
+        ]}}).encode()
+        fake=MagicMock()
+        fake.__enter__.return_value.read.return_value=payload
+        with patch.object(agent.urllib.request,"urlopen",return_value=fake) as request:
+            result=agent.run_tool("wikipedia_search",'{"query":"Arapongas","language":"pt"}')
+        self.assertEqual(result["results"][0]["title"],"Arapongas")
+        self.assertIn("Município",result["results"][0]["snippet"])
+        self.assertNotIn("<span>",result["results"][0]["snippet"])
+        url=request.call_args.args[0].full_url
+        self.assertTrue(url.startswith("https://pt.wikipedia.org/w/api.php?"))
+        self.assertIn("srlimit=3",url)
+
+    def test_wikipedia_rejects_arbitrary_language_and_tokens(self):
+        with patch.object(agent.urllib.request,"urlopen") as request:
+            self.assertIn("error",agent.run_tool("wikipedia_search",'{"query":"Arapongas","language":"fr"}'))
+            secret="gsk_"+"x"*30
+            args=json.dumps({"query":secret,"language":"pt"})
+            self.assertIn("error",agent.run_tool("wikipedia_search",args))
+            request.assert_not_called()
+
+    def test_clock_real_tool_returns_aware_iso_time(self):
+        from datetime import datetime
+        response=agent.run_tool("current_time",'{"timezone":"America/Sao_Paulo"}')
+        timestamp=datetime.fromisoformat(response["local_time"])
+        self.assertIsNotNone(timestamp.tzinfo)
+        self.assertEqual(timestamp.utcoffset().total_seconds(),-3*3600)
+
     def test_shell_and_arbitrary_urls_blocked(self):
         self.assertEqual(agent.run_tool("run_shell",'{"cmd":"id"}'),{"error":"tool_not_allowed"})
         self.assertEqual(agent.run_tool("open_url",'{"url":"http://169.254.169.254"}'),{"error":"tool_not_allowed"})
