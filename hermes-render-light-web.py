@@ -38,6 +38,40 @@ simple.HTML = (simple.HTML
     .replace("Hermes pode usar ferramentas, memória e skills em segundo plano.",
              "Groq Free: limites de uso diário. Não envie informações confidenciais.")
 )
+# The previous sidebar "Advanced" link navigated to Railway (or "/"),
+# so it never activated the new Render advanced chat mode.
+# Replace it only in the lightweight Render interface; leave the full UI intact.
+old_sidebar_link = (
+    '<a class="advanced" href="' + simple.ADVANCED_URL +
+    '" target="_blank">⚙ Avançado</a>'
+)
+new_sidebar_button = (
+    '<button class="advanced" type="button" id="advanced-mode-link">'
+    '⚙ Avançado · ferramentas</button>'
+)
+if old_sidebar_link not in simple.HTML:
+    raise RuntimeError("advanced sidebar UI anchor not found")
+simple.HTML = simple.HTML.replace(old_sidebar_link, new_sidebar_button, 1)
+simple.HTML = simple.HTML.replace(
+    '.advanced:hover{',
+    '.advanced{width:100%;border:0;background:transparent;text-align:left;cursor:pointer}.advanced:hover{',
+    1,
+)
+simple.HTML = simple.HTML.replace(
+    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');",
+    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');\\n"
+    "const advancedButton=$('#advanced-mode-link');\\n"
+    "if(advancedButton) advancedButton.onclick=()=>{\\n"
+    "  $('#model').value='advanced';\\n"
+    "  $('#sidebar').classList.remove('open');\\n"
+    "  statusEl.textContent='modo avançado';\\n"
+    "  input.focus();\\n"
+    "};",
+    1,
+)
+if "id=\"advanced-mode-link\"" not in simple.HTML:
+    raise RuntimeError("advanced sidebar button unavailable")
+
 simple.HTML = simple.HTML.replace(
     "https://hermes-cloud-production-13fb.up.railway.app", "/"
 )
