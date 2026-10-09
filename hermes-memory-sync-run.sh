@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/command/with-contenv sh
 set -eu
 # Separate low-resource background worker. Errors never stop Hermes gateway.
 sleep 45
