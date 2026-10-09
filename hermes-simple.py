@@ -246,6 +246,27 @@ def call_public_deepseek(prompt):
         raise ValueError("Resposta pública inválida")
     return answer
 
+def hf_official_chat(prompt):
+    """Official Hugging Face endpoint for ordinary text; HTTPS + bounded output."""
+    token=os.getenv("HF_TOKEN","").strip()
+    if not token.startswith("hf_") or len(token)<23:
+        raise RuntimeError("HF_TOKEN not configured")
+    model=os.getenv("HERMES_HF_MODEL","Qwen/Qwen2.5-72B-Instruct")
+    allowed={"Qwen/Qwen2.5-72B-Instruct","meta-llama/Meta-Llama-3.1-8B-Instruct","Qwen/Qwen2.5-7B-Instruct-1M"}
+    if model not in allowed:
+        model="Qwen/Qwen2.5-72B-Instruct"
+    body=json.dumps({"model":model,"messages":[{"role":"user","content":prompt}],
+                     "max_tokens":384,"stream":False}).encode("utf-8")
+    req=urllib.request.Request("https://router.huggingface.co/v1/chat/completions",
+        data=body,method="POST",headers={"Authorization":"Bearer "+token,
+        "Content-Type":"application/json","Accept":"application/json"})
+    with urllib.request.urlopen(req,timeout=14) as resp:
+        result=json.loads(resp.read(2*1024*1024))
+    answer=result["choices"][0]["message"]["content"]
+    if not isinstance(answer,str) or not answer.strip():
+        raise ValueError("Empty provider response")
+    return answer,model
+
 def call_upstream(payload):
     """Use the isolated bridge as the single stable chat path."""
     if not BRIDGE_KEY:
@@ -505,6 +526,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.sendb(200,json.dumps({"text":result,"via":"DeepSeek V4 Flash · público",
                     "routeMeta":{"category":"IA pública","skill":"hermes-worldwide-model-router","provider":"DeepSeek V4 Flash · endpoint público"},
                     "imageUrl":None},ensure_ascii=False))
+            # Once HF_TOKEN is supplied in Railway Shared Variables, route normal
+            # text chat to official HF. Execution/media/tool tasks retain bridge.
+            if route=="auto" and not attachment_id and 0<len(text)<=8000 and classify_route(text,route).get("category")=="Geral":
+                if os.getenv("HF_TOKEN","").startswith("hf_"):
+                    try:
+                        hf_text,hf_model=hf_official_chat(text)
+                        return self.sendb(200,json.dumps({"text":hf_text,"via":"huggingface-official",
+                            "routeMeta":{"category":"Geral","skill":"hermes-worldwide-model-router",
+                                         "provider":"Hugging Face · "+hf_model},
+                            "imageUrl":None},ensure_ascii=False))
+                    except Exception as ex:
+                        # Never log sensitive text, upstream error body or HF token.
+                        print("[hermes-simple] HF official unavailable: "+type(ex).__name__+"; continuing private bridge",flush=True)
             payload={"input":text,"conversation":conv or ("web-"+str(int(time.time()*1000))),"store":True}
             if route=="matrix":
                 payload.update({"provider":"matrix","model":"claude-opus-5"})
