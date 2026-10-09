@@ -59,13 +59,13 @@ simple.HTML = simple.HTML.replace(
 )
 simple.HTML = simple.HTML.replace(
     "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');",
-    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');\\n"
-    "const advancedButton=$('#advanced-mode-link');\\n"
-    "if(advancedButton) advancedButton.onclick=()=>{\\n"
-    "  $('#model').value='advanced';\\n"
-    "  $('#sidebar').classList.remove('open');\\n"
-    "  statusEl.textContent='modo avançado';\\n"
-    "  input.focus();\\n"
+    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');\n"
+    "const advancedButton=$('#advanced-mode-link');\n"
+    "if(advancedButton) advancedButton.onclick=()=>{\n"
+    "  $('#model').value='advanced';\n"
+    "  $('#sidebar').classList.remove('open');\n"
+    "  statusEl.textContent='modo avançado';\n"
+    "  input.focus();\n"
     "};",
     1,
 )
