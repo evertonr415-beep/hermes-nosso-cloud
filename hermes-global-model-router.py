@@ -84,7 +84,12 @@ def run(payload):
 
 if __name__=="__main__":
     try:
-        if "--status" in sys.argv:
+        if "--probe" in sys.argv:
+            test=run({"prompt":"Responda apenas: OK.", "sensitivity":"public"})
+            result={"ok":bool(test.get("ok")),"provider":test.get("provider"),
+                    "elapsed_ms":test.get("elapsed_ms"),
+                    "error":test.get("error"),"failures":test.get("failures",[])}
+        elif "--status" in sys.argv:
             result={"enabled":os.getenv("HERMES_GLOBAL_ROUTER_ENABLED")=="1",
                     "configured_providers":[{"id":p["id"],"model":p["model"]} for p in configured()]}
         else:
