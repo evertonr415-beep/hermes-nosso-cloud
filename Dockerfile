@@ -147,6 +147,7 @@ RUN chmod 0755 /usr/local/bin/hermes-memory-sync /etc/services.d/hermes-memory-s
 RUN mkdir -p /opt/hermes/skills/autonomous-ai-agents/hermes-worldwide-model-router
 COPY hermes-global-model-router.py /usr/local/bin/hermes-global-model-router
 COPY hermes-worldwide-model-router/SKILL.md /opt/hermes/skills/autonomous-ai-agents/hermes-worldwide-model-router/SKILL.md
+RUN /usr/bin/python3 -m py_compile /usr/local/bin/hermes-global-model-router
 RUN chmod 0755 /usr/local/bin/hermes-global-model-router
 
 
