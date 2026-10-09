@@ -64,6 +64,34 @@ textarea{flex:1;border:0;outline:none;resize:none;min-height:38px;max-height:180
 @media(max-width:760px){
  .app{grid-template-columns:1fr}.sidebar{position:fixed;z-index:10;left:0;top:0;bottom:0;width:270px;transform:translateX(-100%);transition:.2s}.sidebar.open{transform:none}.menu{display:block}.composerbar{left:0}.chat{padding-top:22px}.bubble{max-width:90%}
 }
+/* Hermes responsive layout: never let mobile topbar or long model responses widen page */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+.app{width:100%;max-width:100%;min-width:0;grid-template-columns:260px minmax(0,1fr)}
+.main,.chatwrap,.chat,.topbar{min-width:0;max-width:100%}
+.main,.chatwrap{overflow-x:hidden}
+.topbar{min-width:0;gap:10px}
+.model{flex:0 1 440px;min-width:0;max-width:100%;text-overflow:ellipsis}
+.status{flex-shrink:0}
+.bubble{min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.msg{min-width:0}
+.assistant .bubble{max-width:100%}
+.bubble pre{white-space:pre;max-width:100%;overflow-x:auto;overflow-y:hidden;background:#f1f2f4;padding:12px;border-radius:9px;font-size:13px}
+.bubble code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f1f2f4;padding:1px 4px;border-radius:4px}
+.bubble pre code{padding:0;background:transparent}
+.bubble strong{font-weight:700}
+@media(max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .topbar{padding:0 10px;gap:7px;width:100%;overflow:hidden}
+  .model{flex:1 1 0;width:0;min-width:0;padding:7px 6px;font-size:14px}
+  .status{font-size:11px;white-space:nowrap}
+  .chat{width:100%;padding:20px 13px 150px}
+  .bubble{max-width:100%}
+  .user .bubble{max-width:92%}
+  .composerbar{left:0;right:0;max-width:100%;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px))}
+  .composer{width:100%;min-width:0}
+  .composer textarea{min-width:0}
+  .note{max-width:100%;padding:0 8px}
+}
 </style>
 </head>
 <body>
@@ -107,6 +135,18 @@ function ensure(){
  if(!current()){const c={id:uid(),title:'Nova conversa',messages:[],created:Date.now()};conversations.unshift(c);active=c.id;save()}
 }
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function formatAnswer(s){
+  // Strictly escape all untrusted model text BEFORE adding limited Markdown.
+  const parts=esc(s).split(/(```[\s\S]*?```)/g);
+  return parts.map(part=>{
+    if(part.startsWith('```') && part.endsWith('```')){
+      const body=part.slice(3,-3).replace(/^[^\n]*\n/,'');
+      return '<pre><code>'+body+'</code></pre>';
+    }
+    return part.replace(/`([^`\n]+)`/g,'<code>$1</code>')
+      .replace(/\*\*([^\n*]+)\*\*/g,'<strong>$1</strong>');
+  }).join('');
+}
 function renderHistory(){
  historyEl.innerHTML=conversations.map(c=>'<button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button>').join('');
  historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')})
@@ -114,7 +154,7 @@ function renderHistory(){
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':esc(m.text))+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':m.role==='assistant'?formatAnswer(m.text):esc(m.text))+(m.role==='assistant'&&Number.isInteger(m.tools_used)&&m.tools_used>0&&m.tools_used<=4?'<div class="tool">🔧 '+m.tools_used+' ferramenta(s) executada(s)</div>':'')+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
@@ -129,7 +169,7 @@ async function submit(){
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)'});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',tools_used:Number.isInteger(data.tools_used)?Math.min(Math.max(data.tools_used,0),4):0});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
 }
@@ -234,7 +274,7 @@ class Handler(BaseHTTPRequestHandler):
             out=response_text(data)
             if not out:
                 out="O Hermes concluiu a execução, mas não retornou texto."
-            return self.sendb(200,json.dumps({"text":out,"via":via},ensure_ascii=False))
+            return self.sendb(200,json.dumps({"text":out,"via":via,"tools_used":int(data.get("hermes_tools_used",0)) if isinstance(data,dict) else 0},ensure_ascii=False))
         except Exception as e:
             # Only display deliberately sanitized messages from our inference
             # adapter. Never echo arbitrary exception text or upstream bodies.
