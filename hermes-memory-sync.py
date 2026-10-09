@@ -147,8 +147,9 @@ def initialize_missing_memory():
     """Create an actually empty file on the persistent volume only when absent."""
     if "MEMORY.md" in find_memory_files():
         return
-    ROOT.mkdir(parents=True,exist_ok=True)
-    target=ROOT/"MEMORY.md"
+    # Hermes Agent's canonical memory directory inside the persistent HERMES_HOME.
+    target=ROOT/"memories"/"MEMORY.md"
+    target.parent.mkdir(parents=True,exist_ok=True)
     try:
         fd=os.open(target,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
         os.close(fd)
