@@ -15,6 +15,7 @@ spec.loader.exec_module(router)
 ENV = {
     "HF_TOKEN": "hf_" + "x" * 29,
     "HERMES_GLOBAL_ROUTER_ENABLED": "1",
+    "HERMES_INFERENCE_MODE": "auto",
     "HERMES_GLOBAL_PROVIDERS_JSON": "[]",
     "HERMES_GLOBAL_KEYLESS_ALLOW": "0",
 }

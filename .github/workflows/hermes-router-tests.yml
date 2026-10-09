@@ -9,6 +9,7 @@ on:
       - "hermes-render-light-web.py"
       - "hermes-simple.py"
       - "tests/test_hf_router_retry.py"
+      - "tests/test_public_anon_router.py"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +27,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py tests/test_hf_router_retry.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py tests/test_hf_router_retry.py tests/test_public_anon_router.py
       - name: Run offline inference-router regression tests
         run: |
-          python -m unittest discover -s tests -p 'test_hf_router_retry.py' -v
+          python -m unittest discover -s tests -p 'test_*router*.py' -v

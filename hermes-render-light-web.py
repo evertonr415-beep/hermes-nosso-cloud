@@ -43,7 +43,7 @@ simple.HTML = simple.HTML.replace(
 class ModelUnavailable(RuntimeError):
     """Public error that is safe to show in the chat without exposing secrets."""
     def __init__(self, user_message):
-        super().__init__("hf_provider_unavailable")
+        super().__init__("inference_provider_unavailable")
         self.user_message = user_message
 
 
@@ -52,7 +52,7 @@ def chat_via_global_router(payload):
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 8000:
         raise ValueError("message_invalid")
     # Forward only this text: not Supabase memory, files or tool outputs.
-    if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\\s+[A-Za-z0-9._-]{16,})", prompt):
+    if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\s+[A-Za-z0-9._-]{16,})", prompt):
         raise ModelUnavailable("Não enviei a mensagem: foi detectada uma possível chave privada.")
     mode = os.getenv("HERMES_INFERENCE_MODE", "anonymous").strip().lower()
     req = {"prompt": prompt.strip(), "sensitivity": "public", "max_tokens": 512}

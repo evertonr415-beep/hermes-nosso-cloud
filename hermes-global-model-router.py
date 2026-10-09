@@ -117,7 +117,7 @@ def configured():
         if not parsed.path.endswith("/chat/completions"): continue
         active.append(p)
     # Third-party anonymous API. Never forward HF credentials; public prompts only.
-    mode = os.getenv("HERMES_INFERENCE_MODE", "anonymous").strip().lower()
+    mode = os.getenv("HERMES_INFERENCE_MODE", "auto").strip().lower()
     if os.getenv("HERMES_PUBLIC_ANONYMOUS_ENABLED", "0") == "1":
         active.append({"id": "anonymous-public",
             "url": "https://vireonix.ai/v1/chat/completions",
@@ -280,7 +280,7 @@ def run(payload):
 if __name__=="__main__":
     try:
         if "--probe" in sys.argv:
-            provider = ("anonymous-public" if os.getenv("HERMES_INFERENCE_MODE", "anonymous") == "anonymous"
+            provider = ("anonymous-public" if os.getenv("HERMES_INFERENCE_MODE", "auto") == "anonymous"
                         else "huggingface-official")
             test=run({"prompt":"Diga OK.", "sensitivity":"public",
                       "provider_id":provider, "max_tokens":16})
