@@ -76,7 +76,7 @@ def find_memory_files():
             stat = file.stat()
             if not file.resolve().is_relative_to(ROOT.resolve()):
                 continue
-            if stat.st_size < 1 or stat.st_size > MAX_FILE_BYTES:
+            if stat.st_size < 0 or stat.st_size > MAX_FILE_BYTES:
                 continue
             name = file.name
             if name not in result or stat.st_mtime > result[name].stat().st_mtime:
@@ -143,6 +143,21 @@ def state_save(data):
     finally:
         temp.unlink(missing_ok=True)
 
+def initialize_missing_memory():
+    """Create an actually empty file on the persistent volume only when absent."""
+    if "MEMORY.md" in find_memory_files():
+        return
+    ROOT.mkdir(parents=True,exist_ok=True)
+    target=ROOT/"MEMORY.md"
+    try:
+        fd=os.open(target,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+        os.close(fd)
+        print("[hermes-memory] initialized empty MEMORY.md on persistent volume",flush=True)
+    except FileExistsError:
+        pass  # Existing files are never overwritten.
+    except OSError as exc:
+        print("[hermes-memory] could not initialize MEMORY.md: "+type(exc).__name__,flush=True)
+
 def synchronize():
     if not configuration_ok():
         print("[hermes-memory] disabled: token_valid=%s key_valid=%s url_valid=%s" % (
@@ -150,6 +165,7 @@ def synchronize():
             bool(re.fullmatch(r"[0-9a-fA-F]{64}", HEXKEY or "")),
             API == "https://aufsewqtybpothlrsjij.supabase.co/functions/v1/hermes-global-memory"),flush=True)
         return False
+    initialize_missing_memory()
     paths = find_memory_files()
     state = state_load()
     if not paths:
