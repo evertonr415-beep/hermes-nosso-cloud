@@ -15,6 +15,7 @@ from http.server import ThreadingHTTPServer
 
 SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
+AGENT_PATH = "/usr/local/bin/hermes-light-agent"
 
 def load_module(name, path):
     loader = SourceFileLoader(name, path)
@@ -26,11 +27,12 @@ def load_module(name, path):
 
 simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
+agent = load_module("hermes_render_light_agent", AGENT_PATH)
 
 # The legacy UI displayed Railway-specific model names and a Railway link.
 # In lightweight mode all chat prompts use ONLY this deployment's global router.
 simple.HTML = (simple.HTML
-    .replace("Automático · GPT-5.6 Sol", "Groq grátis · Qwen 27B")
+    .replace('<option value="auto">Automático · GPT-5.6 Sol</option>', '<option value="auto">Groq grátis · Qwen 27B</option><option value="advanced">Avançado · raciocínio + ferramentas</option>')
     .replace('<option value="matrix">Matrix</option>', "")
     .replace('<option value="local">Hermes Local</option>', "")
     .replace("Hermes pode usar ferramentas, memória e skills em segundo plano.",
@@ -60,7 +62,10 @@ def chat_via_global_router(payload):
         req["provider_id"] = "groq-free"
     elif mode == "anonymous":
         req.update({"provider_id": "anonymous-public", "sensitivity": "public"})
-    result = router.run(req)
+    if mode == "groq" and payload.get("route") == "advanced" and os.getenv("HERMES_AGENT_TOOLS_ENABLED", "1") == "1":
+        result = agent.answer(prompt.strip())
+    else:
+        result = router.run(req)
     if not result.get("ok"):
         failures = result.get("failures") or []
         statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
@@ -88,6 +93,10 @@ def chat_via_global_router(payload):
                     public_message = "Groq HTTP 403: resposta JSON da API, sem código conhecido de bloqueio de modelo. Consulte as permissões e o suporte da Groq."
                 else:
                     public_message = "Groq HTTP 403: acesso negado sem detalhe classificável. Confira logs do Render."
+            elif result.get("error") in ("advanced_tool_budget_reached", "invalid_tool_call"):
+                public_message = "Modo avançado atingiu seu limite de ferramentas. Divida a tarefa em etapas."
+            elif result.get("error") in ("empty_advanced_response", "advanced_provider_unavailable"):
+                public_message = "Modo avançado sem resposta. Tente novamente ou volte ao chat normal."
             elif 429 in statuses:
                 public_message = "O limite de chamadas gratuitas da Groq foi atingido (HTTP 429). Aguarde."
             elif any(s in (400, 404, 422) for s in statuses):
