@@ -93,7 +93,7 @@ simple.HTML = simple.HTML.replace(
     "https://railway.app", "/"
 )
 
-# Injeção nativa original
+# Injeção nativa original do ChatGPT
 simple.HTML = simple.HTML.replace(
     '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>',
     '<div class="note"><label><input type="checkbox" id="use-memory"> '
@@ -168,3 +168,9 @@ def chat_via_global_router(payload):
             public_message = "Erro desconhecido ao processar a resposta."
         raise ModelUnavailable(public_message)
     return result
+
+# PONTO DE PARADA INFINITO: Impede o "Application exited early" mantendo o container ativo no Render
+if __name__ == "__main__":
+    print("[hermes-light] Mantendo o processo ativo em segundo plano...")
+    while True:
+        time.sleep(3600)
