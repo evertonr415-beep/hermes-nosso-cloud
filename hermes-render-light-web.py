@@ -49,7 +49,7 @@ def scan_catalog_nonblocking():
         catalog.check_catalog()
     Thread(target=check, daemon=True, name="hermes-groq-catalog").start()
 
-# Mantém as substituições originais sem travas rígidas de runtime
+# O código original manipula a interface sem travar a inicialização do app
 simple.HTML = (simple.HTML
     .replace('<option value="auto">Automático · GPT-5.6 Sol</option>', '<option value="auto">Groq grátis · Qwen 27B</option><option value="advanced">Avançado · raciocínio + ferramentas</option>')
     .replace('<option value="matrix">Matrix</option>', "")
@@ -58,45 +58,53 @@ simple.HTML = (simple.HTML
              "Groq Free: limites de uso diário. Não envie informações confidenciais.")
 )
 
-old_sidebar_link = '<a class="advanced" href="' + simple.ADVANCED_URL + '" target="_blank">⚙ Avançado</a>'
-new_sidebar_button = '<button class="advanced" type="button" id="advanced-mode-link">⚙ Avançado · ferramentas</button>'
+old_sidebar_link = (
+    '<a class="advanced" href="' + simple.ADVANCED_URL +
+    '" target="_blank">⚙ Avançado</a>'
+)
+new_sidebar_button = (
+    '<button class="advanced" type="button" id="advanced-mode-link">'
+    '⚙ Avançado · ferramentas</button>'
+)
+if old_sidebar_link not in simple.HTML:
+    raise RuntimeError("advanced sidebar UI anchor not found")
+simple.HTML = simple.HTML.replace(old_sidebar_link, new_sidebar_button, 1)
+simple.HTML = simple.HTML.replace(
+    '.advanced:hover{',
+    '.advanced{width:100%;border:0;background:transparent;text-align:left;cursor:pointer}.advanced:hover{',
+    1,
+)
+simple.HTML = simple.HTML.replace(
+    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');",
+    "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');\n"
+    "const advancedButton=$('#advanced-mode-link');\n"
+    "if(advancedButton) advancedButton.onclick=()=>{\n"
+    "  $('#model').value='advanced';\n"
+    "  $('#sidebar').classList.remove('open');\n"
+    "  statusEl.textContent='modo avançado';\n"
+    "  input.focus();\n"
+    "};",
+    1,
+)
+if "id=\"advanced-mode-link\"" not in simple.HTML:
+    raise RuntimeError("advanced sidebar button unavailable")
 
-if old_sidebar_link in simple.HTML:
-    simple.HTML = simple.HTML.replace(old_sidebar_link, new_sidebar_button, 1)
-    simple.HTML = simple.HTML.replace(
-        '.advanced:hover{',
-        '.advanced{width:100%;border:0;background:transparent;text-align:left;cursor:pointer}.advanced:hover{',
-        1,
-    )
-    simple.HTML = simple.HTML.replace(
-        "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');",
-        "$('#menu').onclick=()=>$('#sidebar').classList.toggle('open');\n"
-        "const advancedButton=$('#advanced-mode-link');\n"
-        "if(advancedButton) advancedButton.onclick=()=>{\n"
-        "  $('#model').value='advanced';\n"
-        "  $('#sidebar').classList.remove('open');\n"
-        "  statusEl.textContent='modo avançado';\n"
-        "  input.focus();\n"
-        "};",
-        1,
-    )
+simple.HTML = simple.HTML.replace(
+    "https://railway.app", "/"
+)
 
-simple.HTML = simple.HTML.replace("https://railway.app", "/")
-
-# Adiciona o elemento de checkbox de memória de forma limpa e segura
+# Injeção nativa original
 simple.HTML = simple.HTML.replace(
     '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>',
     '<div class="note"><label><input type="checkbox" id="use-memory"> '
     'Usar memória privada nesta mensagem (enviada à Groq)</label> · '
     'Groq Free: limites de uso diário.</div>', 1)
-
-# Injeta o escopo global "window" para a variável JavaScript nunca falhar no clique
 simple.HTML = simple.HTML.replace(
     "input:text,route:$(\'#model\').value",
-    "input:text,route:$(\'#model\').value,use_memory:window.memoryConsent", 1)
+    "input:text,route:$(\'#model\').value,use_memory:memoryConsent", 1)
 simple.HTML = simple.HTML.replace(
     "try{\\n  const res=await fetch(\'/api/chat\'",
-    "window.memoryConsent=$(\'#use-memory\').checked; $(\'#use-memory\').checked=false;\\n try{\\n  const res=await fetch(\'/api/chat\'", 1)
+    "const memoryConsent=$(\'#use-memory\').checked; $(\'#use-memory\').checked=false;\\n try{\\n  const res=await fetch(\'/api/chat\'", 1)
 
 
 def opt_in_memory_context(prompt, payload, mode):
@@ -149,9 +157,6 @@ def chat_via_global_router(payload):
     else:
         result = router.run(req)
     if not result.get("ok"):
-        failures = result.get("failures") or []
-        statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
-        errors = [f.get("error") for f in failures if isinstance(f,dict)]
         if mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
                 public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em ://groq.com e salve em Environment."
