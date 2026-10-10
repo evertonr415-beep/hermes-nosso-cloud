@@ -12,11 +12,14 @@ import re
 import sys
 from importlib.machinery import SourceFileLoader
 from http.server import ThreadingHTTPServer
+from threading import Thread, Lock
+import time
 
 SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
-MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
+CATALOG_PATH = os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py") if os.path.isfile(os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py")) else "/usr/local/bin/hermes-groq-catalog-monitor"
+MEMORY_PATH = os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py") if os.path.exists(os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py")) else "/usr/local/bin/hermes-memory-recovery"
 
 def load_module(name, path):
     loader = SourceFileLoader(name, path)
@@ -30,6 +33,21 @@ simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
 agent = load_module("hermes_render_light_agent", AGENT_PATH)
 memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
+catalog = load_module("hermes_render_groq_catalog", CATALOG_PATH)
+_catalog_lock = Lock()
+_catalog_next_check = 0.0
+
+def scan_catalog_nonblocking():
+    """No API latency added to chat and no automatic model selection."""
+    global _catalog_next_check
+    now = time.monotonic()
+    with _catalog_lock:
+        if now < _catalog_next_check:
+            return
+        _catalog_next_check = now + 6 * 60 * 60
+    def check():
+        catalog.check_catalog()
+    Thread(target=check, daemon=True, name="hermes-groq-catalog").start()
 
 # The legacy UI displayed Railway-specific model names and a Railway link.
 # In lightweight mode all chat prompts use ONLY this deployment's global router.
@@ -85,7 +103,10 @@ simple.HTML = simple.HTML.replace(
     'Groq Free: limites de uso diário.</div>', 1)
 simple.HTML = simple.HTML.replace(
     "input:text,route:$(\'#model\').value",
-    "input:text,route:$(\'#model\').value,use_memory:$(\'#use-memory\').checked", 1)
+    "input:text,route:$(\'#model\').value,use_memory:memoryConsent", 1)
+simple.HTML = simple.HTML.replace(
+    "try{\\n  const res=await fetch(\'/api/chat\'",
+    "const memoryConsent=$(\'#use-memory\').checked; $(\'#use-memory\').checked=false;\\n try{\\n  const res=await fetch(\'/api/chat\'", 1)
 
 
 def opt_in_memory_context(prompt, payload, mode):
@@ -126,6 +147,8 @@ def chat_via_global_router(payload):
     if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\s+[A-Za-z0-9._-]{16,})", prompt):
         raise ModelUnavailable("Não enviei a mensagem: foi detectada uma possível chave privada.")
     mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
+    if mode == "groq":
+        scan_catalog_nonblocking()
     effective_prompt = opt_in_memory_context(prompt.strip(), payload, mode)
     req = {"prompt": effective_prompt, "sensitivity": "normal", "max_tokens": 512}
     if mode == "groq":
