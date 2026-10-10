@@ -12,14 +12,11 @@ import re
 import sys
 from importlib.machinery import SourceFileLoader
 from http.server import ThreadingHTTPServer
-from threading import Thread, Lock
-import time
 
 SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
-CATALOG_PATH = os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py") if os.path.isfile(os.path.join(os.path.dirname(__file__), "hermes-groq-catalog-monitor.py")) else "/usr/local/bin/hermes-groq-catalog-monitor"
-MEMORY_PATH = os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py") if os.path.exists(os.path.join(os.path.dirname(__file__), "hermes-memory-recovery.py")) else "/usr/local/bin/hermes-memory-recovery"
+MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
 
 def load_module(name, path):
     loader = SourceFileLoader(name, path)
@@ -33,23 +30,9 @@ simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
 agent = load_module("hermes_render_light_agent", AGENT_PATH)
 memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
-catalog = load_module("hermes_render_groq_catalog", CATALOG_PATH)
-_catalog_lock = Lock()
-_catalog_next_check = 0.0
 
-def scan_catalog_nonblocking():
-    """No API latency added to chat and no automatic model selection."""
-    global _catalog_next_check
-    now = time.monotonic()
-    with _catalog_lock:
-        if now < _catalog_next_check:
-            return
-        _catalog_next_check = now + 6 * 60 * 60
-    def check():
-        catalog.check_catalog()
-    Thread(target=check, daemon=True, name="hermes-groq-catalog").start()
-
-# O código original manipula a interface sem travar a inicialização do app
+# The legacy UI displayed Railway-specific model names and a Railway link.
+# In lightweight mode all chat prompts use ONLY this deployment's global router.
 simple.HTML = (simple.HTML
     .replace('<option value="auto">Automático · GPT-5.6 Sol</option>', '<option value="auto">Groq grátis · Qwen 27B</option><option value="advanced">Avançado · raciocínio + ferramentas</option>')
     .replace('<option value="matrix">Matrix</option>', "")
@@ -57,7 +40,9 @@ simple.HTML = (simple.HTML
     .replace("Hermes pode usar ferramentas, memória e skills em segundo plano.",
              "Groq Free: limites de uso diário. Não envie informações confidenciais.")
 )
-
+# The previous sidebar "Advanced" link navigated to Railway (or "/"),
+# so it never activated the new Render advanced chat mode.
+# Replace it only in the lightweight Render interface; leave the full UI intact.
 old_sidebar_link = (
     '<a class="advanced" href="' + simple.ADVANCED_URL +
     '" target="_blank">⚙ Avançado</a>'
@@ -90,10 +75,9 @@ if "id=\"advanced-mode-link\"" not in simple.HTML:
     raise RuntimeError("advanced sidebar button unavailable")
 
 simple.HTML = simple.HTML.replace(
-    "https://railway.app", "/"
+    "https://hermes-cloud-production-13fb.up.railway.app", "/"
 )
-
-# Injeção nativa original do ChatGPT
+# User opt-in is per request and is not saved to localStorage.
 simple.HTML = simple.HTML.replace(
     '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>',
     '<div class="note"><label><input type="checkbox" id="use-memory"> '
@@ -101,10 +85,7 @@ simple.HTML = simple.HTML.replace(
     'Groq Free: limites de uso diário.</div>', 1)
 simple.HTML = simple.HTML.replace(
     "input:text,route:$(\'#model\').value",
-    "input:text,route:$(\'#model\').value,use_memory:memoryConsent", 1)
-simple.HTML = simple.HTML.replace(
-    "try{\\n  const res=await fetch(\'/api/chat\'",
-    "const memoryConsent=$(\'#use-memory\').checked; $(\'#use-memory\').checked=false;\\n try{\\n  const res=await fetch(\'/api/chat\'", 1)
+    "input:text,route:$(\'#model\').value,use_memory:$(\'#use-memory\').checked", 1)
 
 
 def opt_in_memory_context(prompt, payload, mode):
@@ -141,11 +122,10 @@ def chat_via_global_router(payload):
     prompt = payload.get("input", "")
     if not isinstance(prompt, str) or not 1 <= len(prompt.strip()) <= 8000:
         raise ValueError("message_invalid")
+    # Forward only this text: not Supabase memory, files or tool outputs.
     if re.search(r"(?i)(?:hf_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{15,}|sk-(?:proj-)?[A-Za-z0-9_-]{20,}|bearer\s+[A-Za-z0-9._-]{16,})", prompt):
         raise ModelUnavailable("Não enviei a mensagem: foi detectada uma possível chave privada.")
     mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
-    if mode == "groq":
-        scan_catalog_nonblocking()
     effective_prompt = opt_in_memory_context(prompt.strip(), payload, mode)
     req = {"prompt": effective_prompt, "sensitivity": "normal", "max_tokens": 512}
     if mode == "groq":
@@ -157,20 +137,79 @@ def chat_via_global_router(payload):
     else:
         result = router.run(req)
     if not result.get("ok"):
+        failures = result.get("failures") or []
+        statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
+        errors = [f.get("error") for f in failures if isinstance(f,dict)]
+        # Classify using only local error codes. Never display provider
+        # response bodies, prompts or credentials in an error message.
         if mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
-                public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em ://groq.com e salve em Environment."
+                public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em console.groq.com/keys e salve em Environment."
             elif result.get("error") == "no_authorized_healthy_backends":
-                public_message = "Nenhum backend autorizado e saudável encontrado."
+                public_message = "A chave GROQ_API_KEY parece inválida ou ausente."
+            elif 401 in statuses:
+                public_message = "Groq HTTP 401: chave GROQ_API_KEY inválida, revogada ou incorreta. Gere uma nova chave no GroqCloud e atualize o Render."
+            elif 403 in statuses:
+                details = [f.get("code") for f in failures if isinstance(f,dict)]
+                if "model_permission_blocked_org" in details:
+                    public_message = "Groq HTTP 403: modelo bloqueado na organização. Em GroqCloud, abra Settings > Organization > Limits."
+                elif "model_permission_blocked_project" in details:
+                    public_message = "Groq HTTP 403: modelo bloqueado no projeto. Em GroqCloud, abra Settings > Projects > Limits."
+                elif any(f.get("response_kind") == "html" for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta HTML recebida. Possível recusa por gateway/proteção de rede antes da inferência; confira o provedor e o tráfego do Render."
+                elif any(f.get("response_kind") in ("other", "empty") for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta não-JSON ou vazia. Pode ser bloqueio intermediário na conexão de saída do Render."
+                elif any(f.get("response_kind") == "json" for f in failures if isinstance(f,dict)):
+                    public_message = "Groq HTTP 403: resposta JSON da API, sem código conhecido de bloqueio de modelo. Consulte as permissões e o suporte da Groq."
+                else:
+                    public_message = "Groq HTTP 403: acesso negado sem detalhe classificável. Confira logs do Render."
+            elif result.get("error") in ("advanced_tool_budget_reached", "invalid_tool_call"):
+                public_message = "Modo avançado atingiu seu limite de ferramentas. Divida a tarefa em etapas."
+            elif result.get("error") in ("empty_advanced_response", "advanced_provider_unavailable"):
+                public_message = "Modo avançado sem resposta. Tente novamente ou volte ao chat normal."
+            elif 429 in statuses:
+                public_message = "O limite de chamadas gratuitas da Groq foi atingido (HTTP 429). Aguarde."
+            elif any(s in (400, 404, 422) for s in statuses):
+                public_message = "Modelo indisponível na Groq (HTTP " + str(statuses[-1]) + "). Verifique HERMES_GROQ_MODEL."
+            elif statuses:
+                public_message = "Groq temporariamente indisponível (HTTP " + str(statuses[-1]) + ")."
             else:
-                public_message = f"Erro na inferência: {result.get('error', 'desconhecido')}"
+                public_message = "Sem resposta da Groq. Consulte os logs do Render."
+        elif mode == "anonymous":
+            if result.get("error") == "no_authorized_healthy_backends":
+                public_message = "Rota pública desativada. Verifique HERMES_PUBLIC_ANONYMOUS_ENABLED."
+            elif statuses:
+                public_message = "API pública indisponível (HTTP " + str(statuses[-1]) + ")."
+            else:
+                public_message = "Não foi possível acessar o provedor público. Verifique logs do Render."
+        elif 402 in statuses:
+            public_message = "HF retornou HTTP 402 e a rota pública não respondeu."
+        elif statuses:
+            public_message = "Falha de inferência HTTP " + str(statuses[-1])
         else:
-            public_message = "Erro desconhecido ao processar a resposta."
-        raise ModelUnavailable(public_message)
-    return result
+            public_message = "Não há provedor de IA disponível."
 
-# PONTO DE PARADA INFINITO: Impede o "Application exited early" mantendo o container ativo no Render
+        raise ModelUnavailable(public_message)
+    output = {"output": [{
+        "type": "message",
+        "content": [{"type":"output_text","text":result["response"]}]
+    }]}
+    # Only a real, completed advanced function call increments the counter.
+    # Do not label arithmetic generated solely by the model as tool execution.
+    if payload.get("route") == "advanced" and result.get("provider") == "groq-free-advanced":
+        count = result.get("tools_used", 0)
+        if type(count) is int and 0 <= count <= 4:
+            output["hermes_tools_used"] = count
+    return output, result.get("provider", "groq-free")
+
+simple.call_upstream = chat_via_global_router
+
 if __name__ == "__main__":
-    print("[hermes-light] Mantendo o processo ativo em segundo plano...")
-    while True:
-        time.sleep(3600)
+    # The endpoint can become healthy even when inference is not configured.
+    # Without a password, all other endpoints stay unauthorized (fail closed).
+    port = int(os.environ.get("PORT","8080"))
+    if not 1 <= port <= 65535:
+        raise SystemExit("invalid PORT")
+    print("[hermes-light] ready port=%d auth_configured=%s inference_configured=%s" % (
+        port, bool(simple.PASSWORD), bool(os.getenv("GROQ_API_KEY"))), flush=True)
+    ThreadingHTTPServer(("0.0.0.0",port), simple.Handler).serve_forever()
