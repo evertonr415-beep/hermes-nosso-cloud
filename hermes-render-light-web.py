@@ -93,9 +93,14 @@ if "id=\"advanced-mode-link\"" not in simple.HTML:
     raise RuntimeError("advanced sidebar button unavailable")
 
 simple.HTML = simple.HTML.replace(
-    "https://hermes-cloud-production-13fb.up.railway.app", "/"
+    "https://railway.app", "/"
 )
 # User opt-in is per request and is not saved to localStorage.
+simple.HTML = simple.HTML.replace(
+    '<div class="note">Groq Free: limites de uso diário. Não envie informações confidentialidade.</div>',
+    '<div class="note"><label><input type="checkbox" id="use-memory"> '
+    'Usar memória privada nesta mensagem (enviada à Groq)</label> · '
+    'Groq Free: limites de uso diário.</div>', 1, silent=True) # Fallback seguro para substituir a nota antiga
 simple.HTML = simple.HTML.replace(
     '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>',
     '<div class="note"><label><input type="checkbox" id="use-memory"> '
@@ -161,13 +166,9 @@ def chat_via_global_router(payload):
         result = router.run(req)
     if not result.get("ok"):
         failures = result.get("failures") or []
-        statuses = [f.get("status") for f in failures if isinstance(f,dict) and isinstance(f.get("status"),int)]
-        errors = [f.get("error") for f in failures if isinstance(f,dict)]
-        # Classify using only local error codes. Never display provider
-        # response bodies, prompts or credentials in an error message.
         if mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
-                public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em console.groq.com/keys e salve em Environment."
+                public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em ://groq.com e salve em Environment."
             elif result.get("error") == "no_authorized_healthy_backends":
                 public_message = "Nenhum backend autorizado e saudável encontrado."
             else:
