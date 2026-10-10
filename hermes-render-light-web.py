@@ -76,7 +76,7 @@ simple.HTML = simple.HTML.replace(
 
 simple.HTML = simple.HTML.replace("https://railway.app", "/")
 
-# Injeção segura do elemento de memória com suporte global à variável window.memoryConsent
+# Injeção correta do elemento de memória usando a variável global do navegador (window)
 nota_antiga_1 = '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>'
 nota_antiga_2 = '<div class="note">Groq Free: limites de uso diário. Não envie informações confidentialidade.</div>'
 nova_nota_checkbox = '<div class="note"><label><input type="checkbox" id="use-memory"> Usar memória privada nesta mensagem (enviada à Groq)</label> · Groq Free: limites de uso diário.</div>'
