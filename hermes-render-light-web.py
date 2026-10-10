@@ -97,11 +97,6 @@ simple.HTML = simple.HTML.replace(
 )
 # User opt-in is per request and is not saved to localStorage.
 simple.HTML = simple.HTML.replace(
-    '<div class="note">Groq Free: limites de uso diário. Não envie informações confidentialidade.</div>',
-    '<div class="note"><label><input type="checkbox" id="use-memory"> '
-    'Usar memória privada nesta mensagem (enviada à Groq)</label> · '
-    'Groq Free: limites de uso diário.</div>', 1, silent=True) # Fallback seguro para substituir a nota antiga
-simple.HTML = simple.HTML.replace(
     '<div class="note">Groq Free: limites de uso diário. Não envie informações confidenciais.</div>',
     '<div class="note"><label><input type="checkbox" id="use-memory"> '
     'Usar memória privada nesta mensagem (enviada à Groq)</label> · '
@@ -165,7 +160,6 @@ def chat_via_global_router(payload):
     else:
         result = router.run(req)
     if not result.get("ok"):
-        failures = result.get("failures") or []
         if mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
                 public_message = "Falta GROQ_API_KEY no Render. Crie uma chave gratuita em ://groq.com e salve em Environment."
