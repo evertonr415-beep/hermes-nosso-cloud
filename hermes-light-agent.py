@@ -210,7 +210,7 @@ def _explicit_tool_requests(prompt):
     # Skill-management requests are deterministic: do not rely on the LLM
     # deciding whether to call a tool for an explicit inventory operation.
     wants_audit = bool(re.search(
-        r"\b(?:auditoria|auditar|audite|audit(?:ar|oria)?|invent[aá]rio.{0,35}skills?|skills?.{0,35}auditoria)\b",
+        r"\b(?:skills[_\s-]*audit|auditoria|auditar|audite|audit(?:ar|oria)?|invent[aá]rio.{0,35}skills?|skills?.{0,35}auditoria)\b",
         lower))
     wants_list = bool(re.search(
         r"\b(?:listar|liste|listagem|mostre|mostrar|quais|invent[aá]rio)\b.{0,60}\bskills?\b|"
