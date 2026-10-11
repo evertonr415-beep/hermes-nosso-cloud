@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-SOURCE = Path(__file__).with_name("hermes-light-agent.py")
+SOURCE = Path(__file__).resolve().parent.parent / "hermes-light-agent.py"
 SPEC = importlib.util.spec_from_file_location("hermes_light_agent", SOURCE)
 AGENT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(AGENT)
