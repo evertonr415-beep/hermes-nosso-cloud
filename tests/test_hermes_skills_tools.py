@@ -41,6 +41,13 @@ class SkillsToolsTests(unittest.TestCase):
         view = self.call_tool("skill_view", {"skill_id": "sample-skill"})
         self.assertIn("Body text.", view["content"])
 
+    def test_audit_checks_every_skill_file(self):
+        result = self.call_tool("skills_audit", {})
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["healthy"], 1)
+        self.assertEqual(result["issues_count"], 0)
+        self.assertEqual(result["skills"][0]["skill_id"], "sample-skill")
+
     def test_path_traversal_rejected(self):
         result = self.call_tool("skill_view", {"skill_id": "../outside"})
         self.assertEqual(result["error"], "invalid_skill_id")
