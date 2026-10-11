@@ -11,10 +11,10 @@ MAX_ENTRY_CHARS = 1000
 MAX_FILE_BYTES = 128000
 SENSITIVE_LINE = re.compile(
     r"(?i)(?:api[_-]?key|access[_-]?token|secret[_-]?key|private[_-]?key|"
-    r"password|passwd|authorization|senha|token)\\s*[:=]"
+    r"password|passwd|authorization|senha|token)\s*[:=]"
 )
 SENSITIVE_VALUE = re.compile(
-    r"(?i)(?:sk-(?:proj-)?|ghp_|gho_|github_pat_|Bearer\\s+)[A-Za-z0-9_-]{10,}"
+    r"(?i)(?:sk-(?:proj-)?|ghp_|gho_|github_pat_|Bearer\s+)[A-Za-z0-9_-]{10,}"
 )
 
 
