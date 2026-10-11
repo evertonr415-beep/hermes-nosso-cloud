@@ -465,12 +465,19 @@ if __name__ == "__main__":
     if not 1 <= port <= 65535:
         raise SystemExit("invalid PORT")
 
+    # Diagnóstico seguro: mostra apenas se a variável está habilitada.
+    # Não imprime o valor bruto nem qualquer chave de API.
+    router_enabled = (
+        os.getenv("HERMES_GLOBAL_ROUTER_ENABLED") == "1"
+    )
+
     print(
         "[hermes-light] ready port=%d auth_configured=%s "
-        "inference_configured=%s" % (
+        "inference_configured=%s router_enabled=%s" % (
             port,
             bool(simple.PASSWORD),
             bool(os.getenv("GROQ_API_KEY")),
+            router_enabled,
         ),
         flush=True,
     )
