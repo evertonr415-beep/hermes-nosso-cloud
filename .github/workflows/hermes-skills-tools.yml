@@ -29,4 +29,4 @@ jobs:
       - name: Compile agent
         run: python -m py_compile hermes-light-agent.py
       - name: Run skill tool tests
-        run: python -m unittest discover -s tests -v
+        run: python tests/test_hermes_skills_tools.py -v
