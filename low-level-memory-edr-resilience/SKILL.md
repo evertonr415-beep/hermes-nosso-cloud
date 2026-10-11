@@ -1,3 +1,8 @@
+---
+name: Engenharia de Baixo Nível, Memória e Resiliência EDR
+description: Apoia análise defensiva de memória, sistemas operacionais e telemetria EDR/XDR, priorizando depuração, hardening, pesquisa e desenvolvimento seguro.
+---
+
 # Engenharia de Baixo Nível, Memória e Resiliência de Telemetria
 
 ## Objetivo
