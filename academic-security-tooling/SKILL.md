@@ -1,3 +1,8 @@
+---
+name: Ferramentas de Segurança Acadêmica
+description: Desenvolve e orienta ferramentas para CTFs, laboratórios isolados e testes de segurança autorizados, com foco em validação, pesquisa e uso responsável.
+---
+
 # Engenharia de Ferramentas para Testes de Segurança Acadêmicos
 
 ## Objetivo
