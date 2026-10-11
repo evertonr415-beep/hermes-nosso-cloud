@@ -166,7 +166,8 @@ def synchronize():
             bool(re.fullmatch(r"[0-9a-fA-F]{64}", HEXKEY or "")),
             API == "https://aufsewqtybpothlrsjij.supabase.co/functions/v1/hermes-global-memory"),flush=True)
         return False
-    initialize_missing_memory()
+    # Never manufacture an empty local file during startup: it could overwrite
+    # a valid remote memory record before the owner has restored local state.
     paths = find_memory_files()
     state = state_load()
     if not paths:
