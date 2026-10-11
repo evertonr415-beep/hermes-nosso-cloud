@@ -207,7 +207,32 @@ def _explicit_tool_requests(prompt):
             if re.fullmatch(r"[\d\s()+*/.,-]{3,120}",expression):
                 tasks.insert(0,("calculate",{"expression":expression.replace(",",".")}))
                 break
-    return tasks[:3]
+    # Skill-management requests are deterministic: do not rely on the LLM
+    # deciding whether to call a tool for an explicit inventory operation.
+    wants_audit = bool(re.search(
+        r"\b(?:auditoria|auditar|audite|audit(?:ar|oria)?|invent[aá]rio.{0,35}skills?|skills?.{0,35}auditoria)\b",
+        lower))
+    wants_list = bool(re.search(
+        r"\b(?:listar|liste|listagem|mostre|mostrar|quais|invent[aá]rio)\b.{0,60}\bskills?\b|"
+        r"\bskills?\b.{0,60}\b(?:instalad[ao]s?|listar|liste|listagem)\b",
+        lower))
+    view_requested = bool(re.search(
+        r"\b(?:visualizar|visualize|ver|ler|leia|abrir|abra)\b.{0,45}\bskills?\b|"
+        r"\b(?:conte[uú]do|arquivo)\b.{0,30}\bskills?\b",
+        lower))
+    if wants_list:
+        tasks.append(("skills_list", {}))
+    if view_requested:
+        match = re.search(
+            r"\bskills?\s+(?:instalad[ao]s?\s+)?(?:chamad[ao]s?\s+)?(.+?)(?:[?.!;\n]|$)",
+            request, re.IGNORECASE)
+        query = match.group(1).strip(" \t:,'\"") if match else ""
+        if query.casefold() in ("específica", "especifica", "uma skill específica", "uma skill especifica", "instaladas"):
+            query = ""
+        tasks.append(("skill_view_request", {"query": query[:120]}))
+    if wants_audit:
+        tasks.append(("skills_audit", {}))
+    return tasks[:5]
 
 def _verified_tool_answer(prompt):
     """Return a truthful direct answer only for explicit external-data tasks.
@@ -220,14 +245,54 @@ def _verified_tool_answer(prompt):
     lines=[]
     successes=0
     for name,args in tasks:
+        if name == "skill_view_request":
+            query = args.get("query", "")
+            if not query:
+                lines.append("Para visualizar uma skill, preciso do nome ou do skill_id exato. Peça primeiro **listar as skills instaladas** e depois diga qual item quer abrir.")
+                continue
+            listing = run_tool("skills_list", json.dumps({"query": query}, ensure_ascii=False))
+            matches = listing.get("skills", []) if isinstance(listing, dict) else []
+            if not matches:
+                lines.append("Não encontrei uma skill correspondente a **" + query[:100] + "**. Peça **listar as skills instaladas** para ver os IDs disponíveis.")
+                continue
+            exact = next((item for item in matches if item.get("skill_id", "").casefold() == query.casefold()), None)
+            selected = exact or matches[0]
+            data = run_tool("skill_view", json.dumps({"skill_id": selected["skill_id"]}, ensure_ascii=False))
+            if "error" in data:
+                lines.append("Não consegui ler a skill **" + selected.get("skill_id", "") + "**.")
+                continue
+            successes += 1
+            lines.append("**Skill: " + selected.get("name", selected["skill_id"]) + "**\nID: " + selected["skill_id"] + "\n\n" + data.get("content", "")[:9000])
+            continue
         data=run_tool(name,json.dumps(args,ensure_ascii=False))
         if "error" in data:
             label={"current_time":"horário atual","wikipedia_search":"consulta à Wikipédia",
-                   "calculate":"cálculo"}.get(name,"ferramenta")
+                   "calculate":"cálculo","skills_list":"lista de skills",
+                   "skills_audit":"auditoria de skills"}.get(name,"ferramenta")
             lines.append("Não foi possível concluir a "+label+" neste momento. Não vou inventar o resultado.")
             continue
         successes+=1
-        if name=="current_time":
+        if name=="skills_list":
+            skills = data.get("skills", [])
+            lines.append("**Skills instaladas encontradas: " + str(data.get("count", len(skills))) + "**")
+            for item in skills[:25]:
+                desc = item.get("description", "")
+                lines.append("- **" + item.get("name", item.get("skill_id", "")) + "** — ID: " + item.get("skill_id", "") + ((" — " + desc) if desc else ""))
+            if data.get("truncated"):
+                lines.append("A lista foi limitada a 100 resultados; refine a busca pelo nome.")
+            if not skills:
+                lines.append("Nenhuma skill foi encontrada no diretório configurado.")
+        elif name=="skills_audit":
+            lines.append("**Auditoria do inventário de skills concluída**")
+            lines.append("- Arquivos de skill analisados: " + str(data.get("count", 0)))
+            lines.append("- Skills legíveis e não vazias: " + str(data.get("healthy", 0)))
+            lines.append("- Problemas encontrados: " + str(data.get("issues_count", 0)))
+            lines.append("- Avisos de metadados ausentes: " + str(data.get("metadata_warnings", 0)))
+            for item in data.get("issues", [])[:20]:
+                lines.append("- ⚠️ " + item.get("skill_id", "(sem ID)") + ": " + item.get("issue", "problema"))
+            if data.get("issues_count", 0) == 0:
+                lines.append("Nenhum problema de arquivo foi detectado.")
+        elif name=="current_time":
             zone=data["local_time"]
             lines.append("**Horário atual de São Paulo (America/Sao_Paulo):** "+zone+
                          ". Horário obtido do relógio do servidor.")
