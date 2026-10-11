@@ -225,9 +225,10 @@ def opt_in_memory_context(prompt, payload, mode):
 class ModelUnavailable(RuntimeError):
     """Erro seguro para apresentar ao usuário."""
 
-    def __init__(self, user_message):
+    def __init__(self, user_message, status_code=503):
         super().__init__("inference_provider_unavailable")
         self.user_message = user_message
+        self.status_code = status_code
 
 
 def chat_via_global_router(payload):
@@ -483,7 +484,11 @@ def chat_via_global_router(payload):
         else:
             public_message = "Não há provedor de IA disponível."
 
-        raise ModelUnavailable(public_message)
+        # Preserve provider rate limiting as HTTP 429 for clients. Other
+        # upstream failures remain 503; no alternate provider is used to
+        # evade the upstream quota.
+        response_status = 429 if 429 in statuses else 503
+        raise ModelUnavailable(public_message, status_code=response_status)
 
     output = {
         "output": [{
