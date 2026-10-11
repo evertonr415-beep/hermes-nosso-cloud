@@ -16,6 +16,7 @@ SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
 MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
+MEMORY_WRITE_PATH = "/usr/local/bin/hermes-memory-write"
 
 # Keep the lightweight server safe when Render overrides Docker CMD and skips
 # /hermes-spaces-port-run.sh. Match that script's conservative defaults.
@@ -39,6 +40,7 @@ simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
 agent = load_module("hermes_render_light_agent", AGENT_PATH)
 memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
+memory_writer = load_module("hermes_render_memory_write", MEMORY_WRITE_PATH)
 
 
 # Ajusta os nomes dos modelos para o ambiente Render.
@@ -245,6 +247,45 @@ def chat_via_global_router(payload):
         raise ModelUnavailable(
             "Não enviei a mensagem: foi detectada uma possível chave privada."
         )
+
+    # Saving is an explicit command and requires the same per-message opt-in.
+    # Never let the model claim a write that the server has not performed.
+    save_match = re.match(
+        r"^\\s*(?:guarde|salve)\\s+na\\s+mem[oó]ria\\s*:\\s*(.*)$",
+        prompt.strip(), re.IGNORECASE | re.DOTALL,
+    )
+    if save_match:
+        if payload.get("use_memory") is not True or os.getenv("HERMES_MEMORY_CHAT_ENABLED", "0") != "1":
+            message = "Para salvar, marque a caixa de consentimento de memória e envie novamente: Guarde na memória: sua informação."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "memory-save"
+        sync_settings = ("HERMES_MEMORY_SYNC_URL", "HERMES_MEMORY_SYNC_TOKEN", "HERMES_MEMORY_AES_KEY")
+        if not all(os.getenv(name, "").strip() for name in sync_settings):
+            message = "Não salvei: a sincronização criptografada da memória não está configurada no servidor."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "memory-save"
+        try:
+            saved_entry = memory_writer.save_memory_entry(save_match.group(1))
+        except memory_writer.MemoryWriteError as exc:
+            reason = str(exc)
+            if reason == "sensitive_entry":
+                message = "Não salvei: o texto parece conter uma credencial ou informação secreta. Remova esses dados e tente novamente."
+            elif reason == "memory_full":
+                message = "Não salvei: a memória atingiu o limite de armazenamento."
+            else:
+                message = "Não salvei: a informação está vazia, é longa demais ou o armazenamento não está disponível."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "memory-save"
+        try:
+            subprocess.run(
+                ["/usr/bin/python3", "/usr/local/bin/hermes-memory-sync", "--once"],
+                check=False, timeout=50, capture_output=True, text=True,
+            )
+            recovered = memory.recover_record("MEMORY.md")
+        except Exception:
+            recovered = ""
+        if saved_entry in recovered:
+            message = "Salvo e confirmado na memória persistente criptografada. Você pode abrir uma nova conversa e pedir para eu recuperar essa informação."
+        else:
+            message = "A informação foi gravada no volume persistente do Hermes, mas ainda não consegui confirmar a sincronização criptografada. Não vou afirmar que o teste passou; tente novamente em instantes."
+        return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "memory-save"
 
     mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
 
