@@ -1,0 +1,32 @@
+name: Hermes skills tools tests
+
+on:
+  pull_request:
+    paths:
+      - "hermes-light-agent.py"
+      - "tests/test_hermes_skills_tools.py"
+      - ".github/workflows/hermes-skills-tools.yml"
+  push:
+    branches:
+      - main
+      - "feat/hermes-autonomous-skills-audit"
+    paths:
+      - "hermes-light-agent.py"
+      - "tests/test_hermes_skills_tools.py"
+      - ".github/workflows/hermes-skills-tools.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  skills-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile agent
+        run: python -m py_compile hermes-light-agent.py
+      - name: Run skill tool tests
+        run: python -m unittest discover -s tests -v
