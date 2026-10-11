@@ -19,7 +19,8 @@ TOOLS = [
  {"type":"function","function":{"name":"current_time","description":"Get actual current date and time","parameters":{"type":"object","properties":{"timezone":{"type":"string","enum":["America/Sao_Paulo","UTC"]}},"required":["timezone"]}}},
  {"type":"function","function":{"name":"wikipedia_search","description":"Search public Wikipedia article titles and snippets","parameters":{"type":"object","properties":{"query":{"type":"string"},"language":{"type":"string","enum":["pt","en"]}},"required":["query","language"]}}},
  {"type":"function","function":{"name":"skills_list","description":"List installed Hermes skills and their metadata. Read-only; no files are changed.","parameters":{"type":"object","properties":{"query":{"type":"string","description":"Optional search text, maximum 120 characters"}},"required":[]}}},
- {"type":"function","function":{"name":"skill_view","description":"Read one installed Hermes SKILL.md by the exact relative skill ID returned by skills_list. Read-only.","parameters":{"type":"object","properties":{"skill_id":{"type":"string","description":"Exact relative skill ID returned by skills_list"}},"required":["skill_id"]}}}
+ {"type":"function","function":{"name":"skill_view","description":"Read one installed Hermes SKILL.md by the exact relative skill ID returned by skills_list. Read-only.","parameters":{"type":"object","properties":{"skill_id":{"type":"string","description":"Exact relative skill ID returned by skills_list"}},"required":["skill_id"]}}},
+ {"type":"function","function":{"name":"skills_audit","description":"Audit every installed SKILL.md for presence, readability, and non-empty content. Read-only.","parameters":{"type":"object","properties":{},"required":[]}}}
 ]
 OPS = {ast.Add:operator.add,ast.Sub:operator.sub,ast.Mult:operator.mul,ast.Div:operator.truediv}
 
@@ -115,6 +116,45 @@ def run_tool(name,raw):
             with open(target, "r", encoding="utf-8", errors="replace") as handle:
                 content = handle.read(20001)
             return {"skill_id": skill_id, "content": content[:20000], "truncated": len(content) > 20000}
+        if name == "skills_audit":
+            root = os.path.realpath(os.getenv("HERMES_SKILLS_ROOT", "/opt/hermes/skills"))
+            if not os.path.isdir(root):
+                return {"count": 0, "healthy": 0, "issues": [{"issue": "skills_directory_unavailable"}]}
+            skills = []
+            issues = []
+            for current, dirs, files in os.walk(root, followlinks=False):
+                dirs[:] = sorted(d for d in dirs if not os.path.islink(os.path.join(current, d)))
+                if "SKILL.md" not in files:
+                    continue
+                path = os.path.join(current, "SKILL.md")
+                rel = os.path.relpath(current, root).replace(os.sep, "/")
+                try:
+                    if os.path.islink(path) or not os.path.realpath(path).startswith(root + os.sep):
+                        issues.append({"skill_id": rel, "issue": "path_escape"})
+                        continue
+                    size = os.path.getsize(path)
+                    if size > 1048576:
+                        issues.append({"skill_id": rel, "issue": "file_too_large", "bytes": size})
+                        continue
+                    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                        content = handle.read(1048577)
+                    if not content.strip():
+                        issues.append({"skill_id": rel, "issue": "empty_file"})
+                        continue
+                    name_match = re.search(r"(?m)^name:\s*(.*?)\s*$", content)
+                    desc_match = re.search(r"(?m)^description:\s*(.*?)\s*$", content)
+                    skills.append({"skill_id": rel,
+                                   "name": (name_match.group(1).strip(" \"'") if name_match else os.path.basename(current))[:120],
+                                   "description": (desc_match.group(1).strip(" \"'") if desc_match else "")[:200],
+                                   "bytes": size,
+                                   "has_name": bool(name_match),
+                                   "has_description": bool(desc_match)})
+                except (OSError, UnicodeError) as exc:
+                    issues.append({"skill_id": rel, "issue": "unreadable"})
+            skills.sort(key=lambda item: item["skill_id"].casefold())
+            return {"count": len(skills) + len(issues), "healthy": len(skills),
+                    "issues_count": len(issues), "issues": issues, "skills": skills,
+                    "metadata_warnings": sum(1 for item in skills if not item["has_name"] or not item["has_description"])}
         return {"error":"tool_not_allowed"}
     except (ValueError,TypeError,SyntaxError,ZeroDivisionError,OverflowError,
             urllib.error.URLError,OSError,KeyError):
