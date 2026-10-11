@@ -70,8 +70,10 @@ jobs:
         run: python -m unittest discover -s tests -p test_memory_chat.py -v
       - name: Check explicit persistent memory writes
         run: python -m unittest discover -s tests -p test_memory_write.py -v
-      - name: Prepare memory module for UI integration test
-        run: sudo install -m 0644 hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
+      - name: Prepare memory modules for UI integration test
+        run: |
+          sudo install -m 0644 hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
+          sudo install -m 0644 hermes-memory-write.py /usr/local/bin/hermes-memory-write
       - name: Check Advanced sidebar and browser JavaScript
         run: |
           python -m unittest discover -s tests -p 'test_advanced_ui.py' -v
