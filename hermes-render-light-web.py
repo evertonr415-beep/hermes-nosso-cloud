@@ -251,7 +251,7 @@ def chat_via_global_router(payload):
     # Saving is an explicit command and requires the same per-message opt-in.
     # Never let the model claim a write that the server has not performed.
     save_match = re.match(
-        r"^\\s*(?:guarde|salve)\\s+na\\s+mem[oó]ria\\s*:\\s*(.*)$",
+        r"^\s*(?:guarde|salve)\s+na\s+mem[oó]ria\s*:\s*(.*)$",
         prompt.strip(), re.IGNORECASE | re.DOTALL,
     )
     if save_match:
