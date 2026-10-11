@@ -48,6 +48,14 @@ class SkillsToolsTests(unittest.TestCase):
         self.assertEqual(result["issues_count"], 0)
         self.assertEqual(result["skills"][0]["skill_id"], "sample-skill")
 
+    def test_explicit_skills_requests_are_routed_deterministically(self):
+        listing = AGENT._explicit_tool_requests("Listar as skills instaladas")
+        self.assertIn(("skills_list", {}), listing)
+        audit = AGENT._explicit_tool_requests("Executar a auditoria do inventário de skills")
+        self.assertIn(("skills_audit", {}), audit)
+        view = AGENT._explicit_tool_requests("Visualizar a skill sample-skill")
+        self.assertTrue(any(name == "skill_view_request" for name, _ in view))
+
     def test_path_traversal_rejected(self):
         result = self.call_tool("skill_view", {"skill_id": "../outside"})
         self.assertEqual(result["error"], "invalid_skill_id")
