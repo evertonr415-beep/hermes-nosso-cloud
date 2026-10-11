@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """Hermes Render/Spaces lightweight chat web server."""
 import importlib.util
@@ -266,10 +267,67 @@ def chat_via_global_router(payload):
     if not result.get("ok"):
         failures = result.get("failures") or []
 
+        # Diagnóstico seguro: registra apenas campos técnicos permitidos.
+        safe_fields = (
+            "provider",
+            "model",
+            "error",
+            "status",
+            "code",
+            "response_kind",
+            "attempts",
+        )
+
+        safe_failures = []
+
+        for failure in failures:
+            if not isinstance(failure, dict):
+                continue
+
+            safe_failure = {}
+
+            for key in safe_fields:
+                if key not in failure:
+                    continue
+
+                value = failure[key]
+
+                # Limita texto e evita registrar objetos arbitrários.
+                if isinstance(value, str):
+                    value = value[:120]
+                elif value is not None and not isinstance(
+                    value, (int, float, bool)
+                ):
+                    continue
+
+                safe_failure[key] = value
+
+            safe_failures.append(safe_failure)
+
+        diagnostic_error = result.get("error")
+        if not isinstance(diagnostic_error, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.:-]{1,80}", diagnostic_error
+        ):
+            diagnostic_error = "unspecified"
+
+        print(
+            "[hermes-diagnostic] "
+            + json.dumps(
+                {
+                    "mode": mode,
+                    "error": diagnostic_error,
+                    "failures": safe_failures,
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+
         statuses = [
             f.get("status")
             for f in failures
-            if isinstance(f, dict) and isinstance(f.get("status"), int)
+            if isinstance(f, dict)
+            and isinstance(f.get("status"), int)
         ]
 
         if mode == "groq":
