@@ -485,7 +485,7 @@ def start_memory_sync_if_configured():
         while True:
             try:
                 result = subprocess.run(
-                    [sys.executable, "/usr/local/bin/hermes-memory-sync", "--once"],
+                    ["/usr/bin/python3", "/usr/local/bin/hermes-memory-sync", "--once"],
                     check=False, timeout=50, capture_output=True, text=True,
                 )
                 output = (result.stdout or "") + (result.stderr or "")
