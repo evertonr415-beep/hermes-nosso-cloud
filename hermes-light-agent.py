@@ -11,6 +11,9 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
+import threading
+import time
+import uuid
 from zoneinfo import ZoneInfo
 
 URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -40,7 +43,7 @@ def numeric(node,depth=0):
     if not math.isfinite(value) or abs(value)>1e12: raise ValueError("out_of_range")
     return value
 
-def run_tool(name,raw):
+def _run_tool_impl(name,raw):
     try:
         a=json.loads(raw)
         if not isinstance(a,dict): return {"error":"bad_arguments"}
@@ -159,6 +162,36 @@ def run_tool(name,raw):
     except (ValueError,TypeError,SyntaxError,ZeroDivisionError,OverflowError,
             urllib.error.URLError,OSError,KeyError):
         return {"error":"invalid_input_or_source_unavailable"}
+
+
+
+# Safe execution telemetry: tool names and outcomes only; never log arguments or results.
+_audit_context = threading.local()
+
+def run_tool(name, raw):
+    started = time.monotonic()
+    safe_name = name if isinstance(name, str) and name in {
+        "calculate", "current_time", "wikipedia_search",
+        "skills_list", "skill_view", "skills_audit"
+    } else "unknown"
+    status = "error"
+    try:
+        result = _run_tool_impl(name, raw)
+        status = "error" if isinstance(result, dict) and result.get("error") else "ok"
+        return result
+    finally:
+        event = {
+            "event": "hermes_tool_execution",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds"),
+            "request_id": getattr(_audit_context, "request_id", None),
+            "tool": safe_name,
+            "status": status,
+            "duration_ms": round((time.monotonic() - started) * 1000, 2),
+        }
+        try:
+            print("[hermes-tool-audit] " + json.dumps(event, ensure_ascii=True, separators=(",", ":")), flush=True)
+        except Exception:
+            pass
 
 
 def _explicit_tool_requests(prompt):
@@ -330,6 +363,7 @@ def completion(messages,key,model):
     return json.loads(raw)["choices"][0]["message"]
 
 def answer(prompt):
+    _audit_context.request_id = uuid.uuid4().hex[:12]
     key=os.getenv("GROQ_API_KEY","").strip()
     if not re.fullmatch(r"gsk_[A-Za-z0-9_-]{20,}",key):
         return {"ok":False,"error":"no_authorized_healthy_backends"}
