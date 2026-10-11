@@ -1,3 +1,8 @@
+---
+name: Red Team CTF Academic
+description: Ensina metodologias de red teaming e testes de segurança em CTFs, laboratórios controlados e sistemas próprios ou explicitamente autorizados.
+---
+
 # Red Team CTF Academic
 
 ## Purpose
