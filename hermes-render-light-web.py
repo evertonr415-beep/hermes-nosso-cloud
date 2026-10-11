@@ -5,7 +5,10 @@ import importlib.util
 import json
 import os
 import re
+import subprocess
 import sys
+import threading
+import time
 from importlib.machinery import SourceFileLoader
 from http.server import ThreadingHTTPServer
 
@@ -13,6 +16,14 @@ SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
 MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
+
+# Keep the lightweight server safe when Render overrides Docker CMD and skips
+# /hermes-spaces-port-run.sh. Match that script's conservative defaults.
+os.environ.setdefault("HERMES_GLOBAL_ROUTER_ENABLED", "1")
+os.environ.setdefault("HERMES_GLOBAL_KEYLESS_ALLOW", "0")
+os.environ.setdefault("HERMES_INFERENCE_MODE", "groq")
+os.environ.setdefault("HERMES_PUBLIC_ANONYMOUS_ENABLED", "0")
+os.environ.setdefault("HERMES_FALLBACK_ON_HF_402", "0")
 
 
 def load_module(name, path):
@@ -459,11 +470,44 @@ def chat_via_global_router(payload):
 simple.call_upstream = chat_via_global_router
 
 
+def start_memory_sync_if_configured():
+    """Run owner-approved encrypted memory sync when all settings are present."""
+    required = (
+        "HERMES_MEMORY_SYNC_URL",
+        "HERMES_MEMORY_SYNC_TOKEN",
+        "HERMES_MEMORY_AES_KEY",
+    )
+    if not all(os.getenv(name, "").strip() for name in required):
+        print("[hermes-memory] sync not started: configuration incomplete", flush=True)
+        return
+
+    def sync_loop():
+        while True:
+            try:
+                result = subprocess.run(
+                    ["/usr/bin/python3", "/usr/local/bin/hermes-memory-sync", "--once"],
+                    check=False, timeout=50, capture_output=True, text=True,
+                )
+                output = (result.stdout or "") + (result.stderr or "")
+                for line in output.splitlines()[-12:]:
+                    # The sync utility is designed to log status, not secrets or
+                    # plaintext memory. Keep logs bounded and never log env vars.
+                    print(line[:500], flush=True)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print("[hermes-memory] sync attempt failed: " + type(exc).__name__, flush=True)
+            time.sleep(300)
+
+    threading.Thread(target=sync_loop, name="hermes-memory-sync", daemon=True).start()
+    print("[hermes-memory] periodic sync worker started", flush=True)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
 
     if not 1 <= port <= 65535:
         raise SystemExit("invalid PORT")
+
+    start_memory_sync_if_configured()
 
     # Diagnóstico seguro: mostra apenas se a variável está habilitada.
     # Não imprime o valor bruto nem qualquer chave de API.
