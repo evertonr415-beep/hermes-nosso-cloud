@@ -107,7 +107,7 @@ def run_tool(name,raw):
         if name == "skill_view":
             skill_id = a.get("skill_id")
             if not isinstance(skill_id, str) or not skill_id or len(skill_id) > 240 or skill_id.startswith("/") or ".." in skill_id.split("/") or chr(92) in skill_id:
-                raise ValueError("invalid_skill_id")
+                return {"error": "invalid_skill_id"}
             root = os.path.realpath(os.getenv("HERMES_SKILLS_ROOT", "/opt/hermes/skills"))
             target = os.path.realpath(os.path.join(root, skill_id, "SKILL.md"))
             if not target.startswith(root + os.sep) or not os.path.isfile(target) or os.path.islink(os.path.join(root, skill_id, "SKILL.md")):
