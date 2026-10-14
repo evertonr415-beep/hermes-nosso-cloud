@@ -60,7 +60,7 @@ class ImageStudioTests(unittest.TestCase):
             request.assert_not_called()
 
     def test_event_stream_parser_reads_json_data(self):
-        result = studio._event_data(b'event: complete\\ndata: [{"url":"/gradio_api/file=output.png"}]\\n\\n')
+        result = studio._event_data(b'event: complete\ndata: [{"url":"/gradio_api/file=output.png"}]\n\n')
         self.assertEqual(result[0]["url"], "/gradio_api/file=output.png")
 
     def test_external_image_host_is_rejected(self):
@@ -69,10 +69,10 @@ class ImageStudioTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "unsafe_provider_result")
 
     def test_successful_mock_generation_never_needs_paid_api(self):
-        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"mock-image-data"
+        png = b"\x89PNG\r\n\x1a\n" + b"mock-image-data"
         responses = [
             (json.dumps({"event_id": "evt_123"}).encode(), "application/json"),
-            (b'event: complete\\ndata: [{"url":"/gradio_api/file=generated.png"}]\\n\\n', "text/event-stream"),
+            (b'event: complete\ndata: [{"url":"/gradio_api/file=generated.png"}]\n\n', "text/event-stream"),
             (png, "image/png"),
         ]
         with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": "https://my-space.hf.space"}, clear=True), \
