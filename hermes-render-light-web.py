@@ -545,6 +545,8 @@ def start_memory_sync_if_configured():
 
 # Optional image studio: zero-cost-first, authenticated with the same dashboard login.
 IMAGE_STUDIO_PATH = "/usr/local/bin/hermes-image-studio.py"
+if not os.path.isfile(IMAGE_STUDIO_PATH):
+    IMAGE_STUDIO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hermes-image-studio.py")
 image_studio = load_module("hermes_image_studio", IMAGE_STUDIO_PATH)
 _original_image_get = simple.Handler.do_GET
 _original_image_post = simple.Handler.do_POST
