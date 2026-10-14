@@ -148,10 +148,21 @@ def generate(prompt, aspect="square"):
             raise ImageStudioError("provider_token_invalid", "O token do Space está malformado.", 500)
         headers["Authorization"] = "Bearer " + token
 
-    # The worker exposes a named Gradio API: generate(prompt, aspect).
+    # Our own worker exposes generate(prompt, aspect). The public official
+    # FLUX.1-schnell demo instead exposes infer(prompt, seed, randomize_seed,
+    # width, height, steps); support both without a paid fallback.
+    host = urllib.parse.urlsplit(base).hostname
+    if host == "black-forest-labs-flux-1-schnell.hf.space":
+        width, height = ALLOWED_ASPECTS[aspect]
+        api_name = "infer"
+        api_data = [prompt, 0, True, width, height, 4]
+    else:
+        api_name = "generate"
+        api_data = [prompt, aspect]
+
     payload, _ = _request(
-        base + "/gradio_api/call/generate",
-        {"data": [prompt, aspect], "session_hash": secrets.token_hex(12)},
+        base + "/gradio_api/call/" + api_name,
+        {"data": api_data, "session_hash": secrets.token_hex(12)},
         headers=headers,
         timeout=30,
         limit=1024 * 1024,
@@ -165,7 +176,7 @@ def generate(prompt, aspect="square"):
         raise ImageStudioError("provider_protocol_error", "O gerador retornou uma resposta inesperada.", 502)
 
     # Gradio returns a stream; poll/read until it emits the final data frame.
-    stream_url = base + "/gradio_api/call/generate/" + urllib.parse.quote(event_id, safe="")
+    stream_url = base + "/gradio_api/call/" + api_name + "/" + urllib.parse.quote(event_id, safe="")
     stream, _ = _request(stream_url, headers=headers, timeout=TIMEOUT_SECONDS, limit=2 * 1024 * 1024)
     result = _event_data(stream)
     if not isinstance(result, list) or not result:

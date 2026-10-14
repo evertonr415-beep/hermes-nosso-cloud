@@ -85,5 +85,25 @@ class ImageStudioTests(unittest.TestCase):
         self.assertEqual(request.call_count, 3)
 
 
+    def test_official_flux_space_uses_its_infer_api(self):
+        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"mock-image-data"
+        responses = [
+            (json.dumps({"event_id": "evt_flux"}).encode(), "application/json"),
+            (b'event: complete\\ndata: [{"url":"/gradio_api/file=generated.png"},{"seed":42}]\\n\\n', "text/event-stream"),
+            (png, "image/png"),
+        ]
+        base = "https://black-forest-labs-flux-1-schnell.hf.space"
+        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": base}, clear=True), \\
+             patch.object(studio, "_request", side_effect=responses) as request:
+            result = studio.generate("A cinematic mountain landscape at sunrise", "landscape")
+        self.assertTrue(result["ok"])
+        self.assertEqual(request.call_count, 3)
+        self.assertEqual(request.call_args_list[0].args[0], base + "/gradio_api/call/infer")
+        payload = request.call_args_list[0].args[1]
+        self.assertEqual(payload["data"], ["A cinematic mountain landscape at sunrise", 0, True, 1024, 768, 4])
+        self.assertEqual(request.call_args_list[1].args[0], base + "/gradio_api/call/infer/evt_flux")
+
+
+
 if __name__ == "__main__":
     unittest.main()
