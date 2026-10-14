@@ -1,0 +1,7 @@
+gradio>=5.20,<6
+spaces>=0.37
+torch
+diffusers>=0.32
+transformers>=4.44
+accelerate>=1.0
+safetensors

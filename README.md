@@ -184,3 +184,24 @@ Após implantar o último commit no Render, valide também uma consulta real à
 Wikipédia e ao relógio. O êxito de um teste offline não garante acesso à API
 da Wikimedia a partir do Render. O modelo base gratuito continua o mesmo;
 a recuperação de memória privada permanece desativada no modo leve.
+
+
+## Hermes Image Studio — geração de imagens sem cobrança automática
+
+O repositório agora inclui a primeira implementação do estúdio visual:
+
+- `/image-studio`: interface responsiva para prompt e formatos quadrado/retrato/paisagem.
+- `/api/images/status` e `/api/images`: rotas protegidas pela autenticação existente do painel.
+- `hermes-image-studio.py`: cliente de API Gradio, validação de prompts, limites de tamanho e verificação de URL para reduzir risco de SSRF.
+- `hermes-image-worker/`: worker separado para Hugging Face Spaces/ZeroGPU usando FLUX.1 schnell.
+- `tests/test_image_studio.py`: testes offline; nenhuma chamada real ou cobrança é feita pelos testes.
+
+### Configuração do gerador gratuito
+
+1. Publique o conteúdo de `hermes-image-worker/` em um Hugging Face Space Gradio com ZeroGPU, se a opção estiver disponível para sua conta.
+2. Teste a geração dentro do Space antes de conectar o Hermes.
+3. No Render, defina `HERMES_IMAGE_STUDIO_SPACE_URL` com a URL HTTPS direta `https://<usuario>-<space>.hf.space`.
+4. Para Space privado, configure `HERMES_IMAGE_STUDIO_SPACE_TOKEN` como segredo, se o endpoint permitir esse modo de autenticação.
+5. Após deploy desta alteração, abra `/image-studio` no mesmo domínio do Hermes.
+
+A ausência de configuração retorna um aviso claro; o Hermes **não** tenta um provedor pago automaticamente. ZeroGPU tem cotas, tempo de espera e disponibilidade variáveis, então não é geração ilimitada nem SLA 24/7. A interface e os testes ficam prontos nesta alteração, mas a geração real só estará operacional depois de existir um Space funcional e o Render estar atualizado.

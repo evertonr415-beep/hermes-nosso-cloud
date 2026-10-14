@@ -542,6 +542,51 @@ def start_memory_sync_if_configured():
     print("[hermes-memory] periodic sync worker started", flush=True)
 
 
+
+# Optional image studio: zero-cost-first, authenticated with the same dashboard login.
+IMAGE_STUDIO_PATH = "/usr/local/bin/hermes-image-studio.py"
+if not os.path.isfile(IMAGE_STUDIO_PATH):
+    IMAGE_STUDIO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hermes-image-studio.py")
+image_studio = load_module("hermes_image_studio", IMAGE_STUDIO_PATH)
+_original_image_get = simple.Handler.do_GET
+_original_image_post = simple.Handler.do_POST
+
+def _image_studio_get(self):
+    path = self.path.split("?", 1)[0]
+    if path == "/image-studio":
+        if not self.require_auth():
+            return
+        return self.sendb(200, image_studio.HTML, "text/html; charset=utf-8")
+    if path == "/api/images/status":
+        if not self.require_auth():
+            return
+        return self.sendb(200, json.dumps(image_studio.status(), ensure_ascii=False))
+    return _original_image_get(self)
+
+def _image_studio_post(self):
+    path = self.path.split("?", 1)[0]
+    if path != "/api/images":
+        return _original_image_post(self)
+    if not self.require_auth():
+        return
+    try:
+        raw_length = self.headers.get("Content-Length", "0")
+        if not raw_length.isdigit() or int(raw_length) > 16000:
+            return self.sendb(413, json.dumps({"error": "Pedido muito grande."}, ensure_ascii=False))
+        body = json.loads(self.rfile.read(int(raw_length)) or b"{}")
+        result = image_studio.generate(body.get("prompt"), body.get("aspect", "square"))
+        return self.sendb(200, json.dumps(result, ensure_ascii=False))
+    except image_studio.ImageStudioError as exc:
+        return self.sendb(exc.status, json.dumps({"error": exc.message, "code": exc.code}, ensure_ascii=False))
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return self.sendb(400, json.dumps({"error": "Pedido inválido."}, ensure_ascii=False))
+    except Exception as exc:
+        print("[hermes-image-studio] request failed: " + type(exc).__name__, flush=True)
+        return self.sendb(503, json.dumps({"error": "O estúdio de imagens está temporariamente indisponível."}, ensure_ascii=False))
+
+simple.Handler.do_GET = _image_studio_get
+simple.Handler.do_POST = _image_studio_post
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8080"))
 
