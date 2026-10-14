@@ -83,6 +83,8 @@ def _request(url, data=None, headers=None, timeout=TIMEOUT_SECONDS, limit=MAX_IM
     if headers:
         request_headers.update(headers)
     body = None if data is None else json.dumps(data).encode("utf-8")
+    if body is not None:
+        request_headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=body, headers=request_headers, method="GET" if body is None else "POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
