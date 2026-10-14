@@ -244,8 +244,8 @@ def configured():
                 "model": model,
                 "priority": -20 if mode == "groq" else 2,
                 "api_key_env": "GROQ_API_KEY",
-                "max_tokens": 512,
-                "timeout": 20,
+                "max_tokens": 1024,
+                "timeout": 35,
             })
     hf_token = os.getenv("HF_TOKEN", "").strip()
     if mode in ("auto", "huggingface") and re.fullmatch(r"hf_[A-Za-z0-9]{20,}", hf_token):
