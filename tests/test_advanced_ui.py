@@ -14,6 +14,8 @@ ABS_MAP={
     "/opt/hermes-render/hermes-simple.py":"hermes-simple.py",
     "/usr/local/bin/hermes-global-model-router":"hermes-global-model-router.py",
     "/usr/local/bin/hermes-light-agent":"hermes-light-agent.py",
+    "/usr/local/bin/hermes-memory-recovery":"hermes-memory-recovery.py",
+    "/usr/local/bin/hermes-memory-write":"hermes-memory-write.py",
 }
 _REAL_INIT=SourceFileLoader.__init__
 
