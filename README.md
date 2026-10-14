@@ -205,3 +205,11 @@ O repositório agora inclui a primeira implementação do estúdio visual:
 5. Após deploy desta alteração, abra `/image-studio` no mesmo domínio do Hermes.
 
 A ausência de configuração retorna um aviso claro; o Hermes **não** tenta um provedor pago automaticamente. ZeroGPU tem cotas, tempo de espera e disponibilidade variáveis, então não é geração ilimitada nem SLA 24/7. A interface e os testes ficam prontos nesta alteração, mas a geração real só estará operacional depois de existir um Space funcional e o Render estar atualizado.
+
+
+### Diagnóstico do Image Studio
+
+- `GET /api/images/status` informa se a URL do Space foi configurada; a rota usa a autenticação do painel.
+- `provider_not_configured` significa que o código está instalado, mas falta um worker de imagens publicado e ligado por `HERMES_IMAGE_STUDIO_SPACE_URL`.
+- Um deploy do Hermes não publica automaticamente o worker GPU: o Space é um serviço separado e precisa existir antes da geração real.
+- Após cada atualização, confirme o commit ativo na página de deploy do Render e faça uma geração de teste no Image Studio. Os testes offline não substituem essa validação de ponta a ponta.
