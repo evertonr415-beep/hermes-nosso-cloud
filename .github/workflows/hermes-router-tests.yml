@@ -106,7 +106,18 @@ jobs:
             -e BROWSER_WORKER_TOKEN="$token" \
             -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com \
             hermes-agent-browser-worker:test
-          trap 'docker rm -f hermes-browser-worker-smoke >/dev/null 2>&1 || true' EXIT
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "Browser worker logs (diagnostic, no request payloads expected):"
+              docker logs hermes-browser-worker-smoke 2>&1 || true
+              echo "Browser worker container state:"
+              docker inspect hermes-browser-worker-smoke --format '{{json .State}}' 2>/dev/null || true
+            fi
+            docker rm -f hermes-browser-worker-smoke >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
           ready=0
           for attempt in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:18080/health >/tmp/browser-health.json; then
