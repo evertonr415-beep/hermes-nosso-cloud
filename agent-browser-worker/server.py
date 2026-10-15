@@ -105,6 +105,11 @@ def read_page(url, hosts):
 class Handler(BaseHTTPRequestHandler):
     server_version = "HermesBrowserWorker/0.1"
 
+    def setup(self):
+        super().setup()
+        # Slow clients must not occupy a worker thread indefinitely.
+        self.request.settimeout(5)
+
     def log_message(self, fmt, *args):
         # Avoid logging URLs, authorization headers, or page contents.
         print("[browser-worker] request handled", flush=True)
@@ -159,6 +164,42 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200 if "content" in result else 502, result)
 
 
+class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    """Cap concurrent client sockets so unauthenticated traffic cannot spawn unlimited threads."""
+
+    daemon_threads = True
+    request_queue_size = 16
+    max_request_threads = 8
+
+    def __init__(self, server_address, RequestHandlerClass):
+        self._request_slots = threading.BoundedSemaphore(self.max_request_threads)
+        super().__init__(server_address, RequestHandlerClass)
+
+    def process_request(self, request, client_address):
+        if not self._request_slots.acquire(blocking=False):
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\\r\\n"
+                    b"Connection: close\\r\\nContent-Length: 0\\r\\n\\r\\n"
+                )
+            except OSError:
+                pass
+            finally:
+                self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
 def main():
     if len(TOKEN) < 32:
         raise SystemExit("BROWSER_WORKER_TOKEN must be configured with at least 32 characters")
@@ -169,7 +210,7 @@ def main():
     if not hosts:
         raise SystemExit("AGENT_BROWSER_ALLOWED_DOMAINS must contain exact public hostnames")
     print("[browser-worker] starting; read-only mode enabled", flush=True)
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    BoundedThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":
