@@ -86,14 +86,14 @@ class ImageStudioTests(unittest.TestCase):
 
 
     def test_official_flux_space_uses_its_infer_api(self):
-        png = b"\\x89PNG\\r\\n\\x1a\\n" + b"mock-image-data"
+        png = b"\x89PNG\r\n\x1a\n" + b"mock-image-data"
         responses = [
             (json.dumps({"event_id": "evt_flux"}).encode(), "application/json"),
-            (b'event: complete\\ndata: [{"url":"/gradio_api/file=generated.png"},{"seed":42}]\\n\\n', "text/event-stream"),
+            (b'event: complete\ndata: [{"url":"/gradio_api/file=generated.png"},{"seed":42}]\n\n', "text/event-stream"),
             (png, "image/png"),
         ]
         base = "https://black-forest-labs-flux-1-schnell.hf.space"
-        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": base}, clear=True), \\
+        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": base}, clear=True), \
              patch.object(studio, "_request", side_effect=responses) as request:
             result = studio.generate("A cinematic mountain landscape at sunrise", "landscape")
         self.assertTrue(result["ok"])
