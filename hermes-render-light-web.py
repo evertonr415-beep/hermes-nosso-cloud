@@ -296,7 +296,7 @@ def chat_via_global_router(payload):
     req = {
         "prompt": effective_prompt,
         "sensitivity": "normal",
-        "max_tokens": 512,
+        "max_tokens": 1024,
     }
 
     if mode == "groq":
