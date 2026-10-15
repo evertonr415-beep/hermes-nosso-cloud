@@ -141,7 +141,7 @@ jobs:
           echo "Authenticated read HTTP status: $read_status"
           cat /tmp/browser-response.json
           test "$read_status" = "200"
-          grep -q 'Example Domain' /tmp/browser-response.json
+          grep -q 'This domain is for use in documentation examples' /tmp/browser-response.json
           blocked=$(curl -sS -o /dev/null -w '%{http_code}' \
             -X POST http://127.0.0.1:18080/read \
             -H "Authorization: Bearer $token" \
