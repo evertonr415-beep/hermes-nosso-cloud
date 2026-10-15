@@ -147,3 +147,30 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"url":"https://example.org"}')
           test "$blocked" = "400"
+
+          # Exercise an actual cross-host redirect: httpbin.org is allowed,
+          # but example.org is not. The worker must fail closed at navigation.
+          redirect_status=$(curl -sS -o /tmp/browser-redirect-response.json -w '%{http_code}' \
+            --max-time 25 -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://httpbin.org/redirect-to?url=https%3A%2F%2Fexample.org"}')
+          echo "Cross-host redirect HTTP status: $redirect_status"
+          test "$redirect_status" = "502"
+
+          # Sample live container memory during a bounded browser operation.
+          # A 1.5 GiB ceiling is a conservative CI gate, not a production sizing claim.
+          docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke > /tmp/browser-memory.txt
+          python - <<'PY'
+          import re
+          value = open("/tmp/browser-memory.txt", encoding="utf-8").read().strip().split("/", 1)[0].strip()
+          match = re.fullmatch(r"([0-9.]+)(B|KiB|MiB|GiB)", value)
+          if not match:
+              raise SystemExit(f"Could not parse Docker memory usage: {value!r}")
+          amount = float(match.group(1))
+          scale = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}[match.group(2)]
+          mib = amount * scale / 1024**2
+          print(f"Browser worker observed memory usage: {mib:.1f} MiB")
+          if mib > 1536:
+              raise SystemExit("Browser worker exceeded the 1536 MiB CI memory ceiling")
+          PY
