@@ -8,8 +8,8 @@ This is a **separate, optional service**. It is not wired into the production He
 - `GET /health` returns a basic health response.
 - `POST /read` requires `Authorization: Bearer <BROWSER_WORKER_TOKEN>` and JSON exactly shaped as `{"url":"https://host.example/path"}`.
 - Only HTTPS on port 443 and exact hostnames listed in `AGENT_BROWSER_ALLOWED_DOMAINS` are accepted. Redirects and browser subresources are constrained with agent-browser's domain allowlist too.
-- Read-only navigation and accessibility snapshot only. No click, form submission, arbitrary JavaScript, file access, downloads, cookie import, or shell endpoint.
-- Request size, output length, concurrency and command duration are bounded. URL and page contents are not logged.
+- Read-only `agent-browser read` mode only for this first validated integration. It extracts server-delivered page text and does not execute page JavaScript. No click, form submission, arbitrary JavaScript, file access, downloads, cookie import, or shell endpoint.
+- Uses one bounded CLI invocation per request to avoid persistent Chromium-daemon lifecycle issues in the worker. Request size, output length, concurrency and command duration are bounded. URL and page contents are not logged.
 - Page text is untrusted data; callers must not follow instructions found inside a page.
 - There is no model API call and no paid fallback in this worker.
 
