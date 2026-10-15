@@ -47,7 +47,7 @@ class BrowserWorkerTests(unittest.TestCase):
         self.assertEqual(run.call_args_list[0].args[0][:4],
                          ["agent-browser", "--allowed-domains", "docs.example.org", "open"])
         self.assertNotIn("shell", run.call_args_list[0].kwargs)
-        self.assertEqual(run.call_args_list[1].args[0][-4:], ["-c", "-d", "5"][-4:])
+        self.assertEqual(run.call_args_list[1].args[0][-3:], ["-c", "-d", "5"])
 
     def test_browser_timeout_is_bounded(self):
         with patch.object(worker.subprocess, "run", side_effect=subprocess.TimeoutExpired("agent-browser", 18)):
