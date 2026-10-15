@@ -66,25 +66,20 @@ def validate_target(raw_url, hosts):
 
 
 def read_page(url, hosts):
-    # agent-browser enforces the same allowlist in Chromium, including redirects
-    # and subresource requests. No shell is involved; all arguments are fixed.
+    # Use agent-browser's bounded, read-only fetch mode for the first validated
+    # integration. It avoids the persistent Chromium daemon lifecycle while
+    # still applying agent-browser's domain guard to navigation and redirects.
+    # This mode reads server-delivered page text; it does not execute page JS.
     domains = ",".join(hosts)
     with BROWSER_LOCK:
         try:
-            opened = subprocess.run(
-                ["agent-browser", "--allowed-domains", domains, "open", url],
+            result = subprocess.run(
+                ["agent-browser", "--allowed-domains", domains, "read", url],
                 capture_output=True, text=True, timeout=COMMAND_TIMEOUT, check=False,
             )
-            if opened.returncode:
+            if result.returncode:
                 return {"error": "navigation_failed"}
-            snapshot = subprocess.run(
-                ["agent-browser", "--allowed-domains", domains, "snapshot",
-                 "-c", "-d", "5"],
-                capture_output=True, text=True, timeout=COMMAND_TIMEOUT, check=False,
-            )
-            if snapshot.returncode:
-                return {"error": "snapshot_failed"}
-            text = (snapshot.stdout or "").strip()
+            text = (result.stdout or "").strip()
             if not text:
                 return {"error": "empty_page"}
             return {
