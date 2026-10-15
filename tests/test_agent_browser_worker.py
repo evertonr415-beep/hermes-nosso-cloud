@@ -63,6 +63,21 @@ class BrowserWorkerTests(unittest.TestCase):
         self.assertEqual(result, {"error": "navigation_failed"})
         self.assertNotIn("private details", str(result))
 
+    def test_http_server_caps_concurrent_client_threads(self):
+        server = worker.BoundedThreadingHTTPServer(("127.0.0.1", 0), worker.Handler)
+        acquired = []
+        try:
+            for _ in range(server.max_request_threads + 1):
+                acquired.append(server._request_slots.acquire(blocking=False))
+            self.assertEqual(sum(acquired), server.max_request_threads)
+            self.assertFalse(acquired[-1])
+            self.assertEqual(server.request_queue_size, 16)
+        finally:
+            for was_acquired in acquired:
+                if was_acquired:
+                    server._request_slots.release()
+            server.server_close()
+
 
 if __name__ == "__main__":
     unittest.main()
