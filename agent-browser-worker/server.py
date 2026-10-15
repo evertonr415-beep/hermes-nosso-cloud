@@ -93,6 +93,11 @@ def read_page(url, hosts):
             return {"error": "browser_timeout"}
         except OSError:
             return {"error": "browser_unavailable"}
+        except Exception as exc:
+            # Never let an unexpected CLI/output exception tear down the HTTP
+            # response. Log only the exception type, never URL or page text.
+            print(f"[browser-worker] browser operation failed: {type(exc).__name__}", flush=True)
+            return {"error": "browser_internal_error"}
 
 
 class Handler(BaseHTTPRequestHandler):
