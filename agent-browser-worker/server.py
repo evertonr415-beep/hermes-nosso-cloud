@@ -6,6 +6,7 @@ an explicit exact-host allowlist, requires a bearer token, and exposes no
 click/eval/download/file or arbitrary command endpoint.
 """
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -33,6 +34,14 @@ def allowed_hosts():
                 r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*",
                 host)):
             raise ValueError("invalid_allowed_domain")
+        try:
+            ipaddress.ip_address(host)
+            raise ValueError("ip_literals_not_allowed")
+        except ValueError as exc:
+            if str(exc) == "ip_literals_not_allowed":
+                raise
+        if "." not in host or host in {"localhost"} or host.endswith((".local", ".internal", ".localhost")):
+            raise ValueError("local_host_not_allowed")
         if host not in hosts:
             hosts.append(host)
     return hosts
