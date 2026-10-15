@@ -75,7 +75,8 @@ def read_page(url, hosts):
         try:
             result = subprocess.run(
                 ["agent-browser", "--allowed-domains", domains, "read", url],
-                capture_output=True, text=True, timeout=COMMAND_TIMEOUT, check=False,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=COMMAND_TIMEOUT, check=False,
             )
             if result.returncode:
                 return {"error": "navigation_failed"}
