@@ -102,6 +102,7 @@ jobs:
           set -euo pipefail
           token="ci-test-token-0123456789abcdef012345"
           docker run -d --rm --name hermes-browser-worker-smoke \
+            --memory=1536m --memory-swap=1536m \
             -p 127.0.0.1:18080:8080 \
             -e BROWSER_WORKER_TOKEN="$token" \
             -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com,httpbin.org \
@@ -158,19 +159,45 @@ jobs:
           echo "Cross-host redirect HTTP status: $redirect_status"
           test "$redirect_status" = "502"
 
-          # Sample live container memory during a bounded browser operation.
-          # A 1.5 GiB ceiling is a conservative CI gate, not a production sizing claim.
-          docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke > /tmp/browser-memory.txt
+          # Sample peak memory while exercising repeated reads and a redirect.
+          # The container is hard-limited to 1536 MiB for this CI experiment.
+          docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke >/dev/null
+          (
+            while docker inspect hermes-browser-worker-smoke >/dev/null 2>&1; do
+              docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke 2>/dev/null \
+                | cut -d/ -f1 | xargs -r echo >> /tmp/browser-memory-samples.txt
+              sleep 0.2
+            done
+          ) &
+          sampler_pid=$!
+          for attempt in 1 2 3 4 5; do
+            repeat_status=$(curl -sS -o /tmp/browser-repeat-response.json -w '%{http_code}' \
+              --max-time 25 -X POST http://127.0.0.1:18080/read \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/json' \
+              -d '{"url":"https://example.com"}')
+            echo "Repeated read $attempt HTTP status: $repeat_status"
+            test "$repeat_status" = "200"
+            grep -q 'This domain is for use in documentation examples' /tmp/browser-repeat-response.json
+          done
+          sleep 1
+          kill "$sampler_pid" 2>/dev/null || true
+          wait "$sampler_pid" 2>/dev/null || true
           python - <<'PY'
           import re
-          value = open("/tmp/browser-memory.txt", encoding="utf-8").read().strip().split("/", 1)[0].strip()
-          match = re.fullmatch(r"([0-9.]+)(B|KiB|MiB|GiB)", value)
-          if not match:
-              raise SystemExit(f"Could not parse Docker memory usage: {value!r}")
-          amount = float(match.group(1))
-          scale = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}[match.group(2)]
-          mib = amount * scale / 1024**2
-          print(f"Browser worker observed memory usage: {mib:.1f} MiB")
-          if mib > 1536:
+          from pathlib import Path
+          samples = Path("/tmp/browser-memory-samples.txt").read_text(encoding="utf-8").splitlines()
+          if not samples:
+              raise SystemExit("No Docker memory samples were captured")
+          scale = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+          values = []
+          for value in samples:
+              match = re.fullmatch(r"([0-9.]+)(B|KiB|MiB|GiB)", value.strip())
+              if not match:
+                  raise SystemExit(f"Could not parse Docker memory usage sample: {value!r}")
+              values.append(float(match.group(1)) * scale[match.group(2)] / 1024**2)
+          peak = max(values)
+          print(f"Browser worker sampled peak memory across repeated reads: {peak:.1f} MiB ({len(values)} samples)")
+          if peak > 1536:
               raise SystemExit("Browser worker exceeded the 1536 MiB CI memory ceiling")
           PY
