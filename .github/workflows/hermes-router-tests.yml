@@ -139,7 +139,6 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"url":"https://example.com"}')
           echo "Authenticated read HTTP status: $read_status"
-          cat /tmp/browser-response.json
           test "$read_status" = "200"
           grep -q 'This domain is for use in documentation examples' /tmp/browser-response.json
           blocked=$(curl -sS -o /dev/null -w '%{http_code}' \
