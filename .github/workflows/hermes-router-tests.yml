@@ -96,3 +96,40 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build isolated agent-browser image
         run: docker build -f agent-browser-worker/Dockerfile -t hermes-agent-browser-worker:test agent-browser-worker
+      - name: Smoke-test authenticated read-only browser in container
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="ci-test-token-0123456789abcdef012345"
+          docker run -d --rm --name hermes-browser-worker-smoke \
+            -p 127.0.0.1:18080:8080 \
+            -e BROWSER_WORKER_TOKEN="$token" \
+            -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com \
+            hermes-agent-browser-worker:test
+          trap 'docker rm -f hermes-browser-worker-smoke >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/health >/tmp/browser-health.json; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          grep -q 'isolated-browser-worker' /tmp/browser-health.json
+          unauthorized=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:18080/read \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.com"}')
+          test "$unauthorized" = "401"
+          curl -fsS -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.com"}' > /tmp/browser-response.json
+          grep -q 'Example Domain' /tmp/browser-response.json
+          blocked=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.org"}')
+          test "$blocked" = "400"
