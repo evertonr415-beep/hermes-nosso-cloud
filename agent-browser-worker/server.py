@@ -73,11 +73,13 @@ def read_page(url, hosts):
     domains = ",".join(hosts)
     with BROWSER_LOCK:
         try:
+            print("[browser-worker] read operation started", flush=True)
             result = subprocess.run(
                 ["agent-browser", "--allowed-domains", domains, "read", url],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=COMMAND_TIMEOUT, check=False,
             )
+            print(f"[browser-worker] read operation exited: {result.returncode}", flush=True)
             if result.returncode:
                 return {"error": "navigation_failed"}
             text = (result.stdout or "").strip()
@@ -109,6 +111,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _send(self, status, payload):
         data = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        print(f"[browser-worker] sending HTTP {status} ({len(data)} bytes)", flush=True)
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
