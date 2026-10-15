@@ -79,7 +79,7 @@ def read_page(url, hosts):
                 return {"error": "navigation_failed"}
             snapshot = subprocess.run(
                 ["agent-browser", "--allowed-domains", domains, "snapshot",
-                 "-i", "-c", "-d", "5"],
+                 "-c", "-d", "5"],
                 capture_output=True, text=True, timeout=COMMAND_TIMEOUT, check=False,
             )
             if snapshot.returncode:
