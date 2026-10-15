@@ -133,10 +133,14 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"url":"https://example.com"}')
           test "$unauthorized" = "401"
-          curl -fsS -X POST http://127.0.0.1:18080/read \
+          read_status=$(curl -sS -o /tmp/browser-response.json -w '%{http_code}' \
+            --max-time 25 -X POST http://127.0.0.1:18080/read \
             -H "Authorization: Bearer $token" \
             -H 'Content-Type: application/json' \
-            -d '{"url":"https://example.com"}' > /tmp/browser-response.json
+            -d '{"url":"https://example.com"}')
+          echo "Authenticated read HTTP status: $read_status"
+          cat /tmp/browser-response.json
+          test "$read_status" = "200"
           grep -q 'Example Domain' /tmp/browser-response.json
           blocked=$(curl -sS -o /dev/null -w '%{http_code}' \
             -X POST http://127.0.0.1:18080/read \
