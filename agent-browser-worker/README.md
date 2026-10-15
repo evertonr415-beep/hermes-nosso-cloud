@@ -4,7 +4,7 @@ This is a **separate, optional service**. It is not wired into the production He
 
 ## Behavior and guardrails
 
-- Pinned to `agent-browser@0.39.0`; Chromium is installed in this worker image only.
+- Pinned to `agent-browser@0.39.0`; the package's native-binary postinstall is explicitly permitted and verified during image build. Chromium is installed in this worker image only.
 - `GET /health` returns a basic health response.
 - `POST /read` requires `Authorization: Bearer <BROWSER_WORKER_TOKEN>` and JSON exactly shaped as `{"url":"https://host.example/path"}`.
 - Only HTTPS on port 443 and exact hostnames listed in `AGENT_BROWSER_ALLOWED_DOMAINS` are accepted. Redirects and browser subresources are constrained with agent-browser's domain allowlist too.
