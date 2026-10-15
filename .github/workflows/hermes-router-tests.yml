@@ -104,7 +104,7 @@ jobs:
           docker run -d --rm --name hermes-browser-worker-smoke \
             -p 127.0.0.1:18080:8080 \
             -e BROWSER_WORKER_TOKEN="$token" \
-            -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com \
+            -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com,httpbin.org \
             hermes-agent-browser-worker:test
           cleanup() {
             status=$?
