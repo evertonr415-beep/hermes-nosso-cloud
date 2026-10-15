@@ -17,8 +17,9 @@ RUN apt-get update \
        libatspi2.0-0 libcups2 libxshmfence1 libgbm1 \
        fonts-noto-color-emoji fonts-noto-cjk fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install --global agent-browser@0.39.0 \
-    && agent-browser install
+    && npm install --global --allow-scripts=agent-browser agent-browser@0.39.0 \
+    && agent-browser install \
+    && agent-browser --help >/dev/null
 
 COPY server.py /app/server.py
 ENV PORT=8080
