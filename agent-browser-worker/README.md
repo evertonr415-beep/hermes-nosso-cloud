@@ -29,4 +29,4 @@ python3 -m unittest discover -s ../tests -p 'test_agent_browser_worker.py' -v
 
 ## Deployment gate
 
-Do not connect this worker to Hermes or deploy it publicly until its unit tests, image build, health check, authenticated request test, redirect/domain-boundary test, and resource usage have been verified. The existing Render service is intentionally untouched. A browser-enabled container needs additional memory and a browser download, so it should remain isolated until measured.
+CI now verifies the unit tests, image build, health check, authenticated read, unauthenticated rejection, non-allowlisted-host rejection, and a real cross-host redirect attempt (which must fail closed). The latest successful run observed **308.9 MiB** of container memory after the browser checks, below the CI guardrail of 1536 MiB. This is a single GitHub-hosted runner observation, not a production sizing guarantee or peak-memory measurement. Keep the PR isolated: do not connect this worker to Hermes or deploy it publicly until repeated/peak resource measurements and deployment-specific limits are reviewed. The existing Render service is intentionally untouched.
