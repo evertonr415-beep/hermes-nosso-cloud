@@ -159,17 +159,13 @@ jobs:
           echo "Cross-host redirect HTTP status: $redirect_status"
           test "$redirect_status" = "502"
 
-          # Sample peak memory while exercising repeated reads and a redirect.
-          # The container is hard-limited to 1536 MiB for this CI experiment.
-          docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke >/dev/null
-          (
-            while docker inspect hermes-browser-worker-smoke >/dev/null 2>&1; do
-              docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke 2>/dev/null \
-                | cut -d/ -f1 | xargs -r echo >> /tmp/browser-memory-samples.txt
-              sleep 0.2
-            done
-          ) &
-          sampler_pid=$!
+          # Sample memory before/after each operation; hard-limit this CI container to 1536 MiB.
+          : > /tmp/browser-memory-samples.txt
+          sample_memory() {
+            docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke \
+              | cut -d/ -f1 | tr -d ' ' >> /tmp/browser-memory-samples.txt
+          }
+          sample_memory
           for attempt in 1 2 3 4 5; do
             repeat_status=$(curl -sS -o /tmp/browser-repeat-response.json -w '%{http_code}' \
               --max-time 25 -X POST http://127.0.0.1:18080/read \
@@ -179,16 +175,16 @@ jobs:
             echo "Repeated read $attempt HTTP status: $repeat_status"
             test "$repeat_status" = "200"
             grep -q 'This domain is for use in documentation examples' /tmp/browser-repeat-response.json
+            sample_memory
+            sleep 0.25
           done
-          sleep 1
-          kill "$sampler_pid" 2>/dev/null || true
-          wait "$sampler_pid" 2>/dev/null || true
+          sample_memory
           python - <<'PY'
           import re
           from pathlib import Path
           samples = Path("/tmp/browser-memory-samples.txt").read_text(encoding="utf-8").splitlines()
-          if not samples:
-              raise SystemExit("No Docker memory samples were captured")
+          if len(samples) < 7:
+              raise SystemExit(f"Expected at least 7 memory samples, got {len(samples)}")
           scale = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
           values = []
           for value in samples:
