@@ -48,6 +48,8 @@ class BrowserWorkerTests(unittest.TestCase):
                           "read", "https://docs.example.org/"])
         self.assertNotIn("shell", run.call_args.kwargs)
         self.assertEqual(run.call_args.kwargs["timeout"], worker.COMMAND_TIMEOUT)
+        self.assertEqual(run.call_args.kwargs["encoding"], "utf-8")
+        self.assertEqual(run.call_args.kwargs["errors"], "replace")
 
     def test_browser_timeout_is_bounded(self):
         with patch.object(worker.subprocess, "run", side_effect=subprocess.TimeoutExpired("agent-browser", 18)):
