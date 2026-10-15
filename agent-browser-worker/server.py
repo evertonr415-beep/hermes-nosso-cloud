@@ -31,7 +31,7 @@ def allowed_hosts():
         if not host:
             continue
         if (len(host) > 253 or not re.fullmatch(
-                r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*",
+                r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*",
                 host)):
             raise ValueError("invalid_allowed_domain")
         try:
