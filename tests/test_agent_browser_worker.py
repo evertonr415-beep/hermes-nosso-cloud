@@ -35,19 +35,19 @@ class BrowserWorkerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     worker.allowed_hosts()
 
-    def test_read_page_uses_fixed_commands_and_caps_output(self):
-        opened = MagicMock(returncode=0, stdout="ok", stderr="")
+    def test_read_page_uses_single_bounded_read_command_and_caps_output(self):
         page = "x" * (worker.MAX_OUTPUT + 1)
-        snapshot = MagicMock(returncode=0, stdout=page, stderr="")
-        with patch.object(worker.subprocess, "run", side_effect=[opened, snapshot]) as run:
+        result_from_cli = MagicMock(returncode=0, stdout=page, stderr="")
+        with patch.object(worker.subprocess, "run", return_value=result_from_cli) as run:
             result = worker.read_page("https://docs.example.org/", ["docs.example.org"])
         self.assertEqual(len(result["content"]), worker.MAX_OUTPUT)
         self.assertTrue(result["truncated"])
-        self.assertEqual(run.call_count, 2)
-        self.assertEqual(run.call_args_list[0].args[0][:4],
-                         ["agent-browser", "--allowed-domains", "docs.example.org", "open"])
-        self.assertNotIn("shell", run.call_args_list[0].kwargs)
-        self.assertEqual(run.call_args_list[1].args[0][-3:], ["-c", "-d", "5"])
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0],
+                         ["agent-browser", "--allowed-domains", "docs.example.org",
+                          "read", "https://docs.example.org/"])
+        self.assertNotIn("shell", run.call_args.kwargs)
+        self.assertEqual(run.call_args.kwargs["timeout"], worker.COMMAND_TIMEOUT)
 
     def test_browser_timeout_is_bounded(self):
         with patch.object(worker.subprocess, "run", side_effect=subprocess.TimeoutExpired("agent-browser", 18)):
