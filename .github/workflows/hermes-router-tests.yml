@@ -102,7 +102,7 @@ jobs:
           set -euo pipefail
           token="ci-test-token-0123456789abcdef012345"
           docker run -d --rm --name hermes-browser-worker-smoke \
-            --memory=1536m --memory-swap=1536m \
+            --memory=512m --memory-swap=512m \
             -p 127.0.0.1:18080:8080 \
             -e BROWSER_WORKER_TOKEN="$token" \
             -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com,httpbin.org \
@@ -200,6 +200,6 @@ jobs:
               values.append(float(match.group(1)) * scale[match.group(2)] / 1024**2)
           peak = max(values)
           print(f"Browser worker sampled peak memory across 20 mixed-content reads: {peak:.1f} MiB ({len(values)} samples)")
-          if peak > 1536:
-              raise SystemExit("Browser worker exceeded the 1536 MiB CI memory ceiling")
+          if peak > 512:
+              raise SystemExit("Browser worker exceeded the 512 MiB CI memory ceiling")
           PY
