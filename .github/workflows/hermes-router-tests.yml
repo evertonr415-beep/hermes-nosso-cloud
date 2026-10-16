@@ -184,6 +184,27 @@ jobs:
             sample_memory
             sleep 0.25
           done
+
+          # Exercise bounded concurrent clients while the worker remains under the 512 MiB cgroup limit.
+          pids=()
+          for attempt in $(seq 1 6); do
+            (
+              concurrent_status=$(curl -sS -o "/tmp/browser-concurrent-${attempt}.json" -w '%{http_code}' \
+                --max-time 90 -X POST http://127.0.0.1:18080/read \
+                -H "Authorization: Bearer $token" \
+                -H 'Content-Type: application/json' \
+                -d '{"url":"https://example.com"}')
+              echo "$concurrent_status" > "/tmp/browser-concurrent-${attempt}.status"
+            ) &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+          for attempt in $(seq 1 6); do
+            concurrent_status=$(cat "/tmp/browser-concurrent-${attempt}.status")
+            echo "Concurrent read $attempt HTTP status: $concurrent_status"
+            test "$concurrent_status" = "200"
+            grep -q '"content":' "/tmp/browser-concurrent-${attempt}.json"
+          done
           sample_memory
           python - <<'PY'
           import re
