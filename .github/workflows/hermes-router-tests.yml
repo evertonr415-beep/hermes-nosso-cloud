@@ -31,6 +31,8 @@ on:
       - "hermes-image-studio.py"
       - "hermes-image-worker/app.py"
       - "tests/test_image_studio.py"
+      - "agent-browser-worker/**"
+      - "tests/test_agent_browser_worker.py"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -50,7 +52,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py hermes-image-studio.py tests/test_image_studio.py hermes-image-worker/app.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py hermes-image-studio.py tests/test_image_studio.py tests/test_agent_browser_worker.py agent-browser-worker/server.py hermes-image-worker/app.py
       - name: Run offline inference-router regression tests
         run: |
           python -m unittest discover -s tests -p 'test_*router*.py' -v
@@ -83,3 +85,142 @@ jobs:
           python -m unittest discover -s tests -p 'test_advanced_ui.py' -v
       - name: Test zero-cost image studio adapter (offline)
         run: python -m unittest discover -s tests -p 'test_image_studio.py' -v
+
+      - name: Test isolated agent-browser worker (offline)
+        run: python -m unittest discover -s tests -p 'test_agent_browser_worker.py' -v
+
+  browser-worker-image-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build isolated agent-browser image
+        run: docker build -f agent-browser-worker/Dockerfile -t hermes-agent-browser-worker:test agent-browser-worker
+      - name: Smoke-test authenticated read-only browser in container
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="ci-test-token-0123456789abcdef012345"
+          docker run -d --rm --name hermes-browser-worker-smoke \
+            --memory=512m --memory-swap=512m \
+            -p 127.0.0.1:18080:8080 \
+            -e BROWSER_WORKER_TOKEN="$token" \
+            -e AGENT_BROWSER_ALLOWED_DOMAINS=example.com,httpbin.org \
+            hermes-agent-browser-worker:test
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              echo "Browser worker logs (diagnostic, no request payloads expected):"
+              docker logs hermes-browser-worker-smoke 2>&1 || true
+              echo "Browser worker container state:"
+              docker inspect hermes-browser-worker-smoke --format '{{json .State}}' 2>/dev/null || true
+            fi
+            docker rm -f hermes-browser-worker-smoke >/dev/null 2>&1 || true
+            exit "$status"
+          }
+          trap cleanup EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/health >/tmp/browser-health.json; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = "1"
+          grep -q 'isolated-browser-worker' /tmp/browser-health.json
+          unauthorized=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:18080/read \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.com"}')
+          test "$unauthorized" = "401"
+          read_status=$(curl -sS -o /tmp/browser-response.json -w '%{http_code}' \
+            --max-time 25 -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.com"}')
+          echo "Authenticated read HTTP status: $read_status"
+          test "$read_status" = "200"
+          grep -q 'This domain is for use in documentation examples' /tmp/browser-response.json
+          blocked=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://example.org"}')
+          test "$blocked" = "400"
+
+          # Exercise an actual cross-host redirect: httpbin.org is allowed,
+          # but example.org is not. The worker must fail closed at navigation.
+          redirect_status=$(curl -sS -o /tmp/browser-redirect-response.json -w '%{http_code}' \
+            --max-time 25 -X POST http://127.0.0.1:18080/read \
+            -H "Authorization: Bearer $token" \
+            -H 'Content-Type: application/json' \
+            -d '{"url":"https://httpbin.org/redirect-to?url=https%3A%2F%2Fexample.org"}')
+          echo "Cross-host redirect HTTP status: $redirect_status"
+          test "$redirect_status" = "502"
+
+          # Longer sequential run against a tiny page and a larger public HTML page.
+          # This is sampled CI usage, not a substitute for sustained production load testing.
+          : > /tmp/browser-memory-samples.txt
+          sample_memory() {
+            docker stats --no-stream --format '{{.MemUsage}}' hermes-browser-worker-smoke \
+              | cut -d/ -f1 | tr -d ' ' >> /tmp/browser-memory-samples.txt
+          }
+          sample_memory
+          for attempt in $(seq 1 20); do
+            if [ "$((attempt % 2))" -eq 0 ]; then
+              target_url="https://httpbin.org/html"
+            else
+              target_url="https://example.com"
+            fi
+            repeat_status=$(curl -sS -o /tmp/browser-repeat-response.json -w '%{http_code}' \
+              --max-time 25 -X POST http://127.0.0.1:18080/read \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/json' \
+              -d "{\"url\":\"$target_url\"}")
+            echo "Repeated read $attempt HTTP status: $repeat_status"
+            test "$repeat_status" = "200"
+            grep -q '"content":' /tmp/browser-repeat-response.json
+            sample_memory
+            sleep 0.25
+          done
+
+          # Exercise bounded concurrent clients while the worker remains under the 512 MiB cgroup limit.
+          pids=()
+          for attempt in $(seq 1 6); do
+            (
+              concurrent_status=$(curl -sS -o "/tmp/browser-concurrent-${attempt}.json" -w '%{http_code}' \
+                --max-time 90 -X POST http://127.0.0.1:18080/read \
+                -H "Authorization: Bearer $token" \
+                -H 'Content-Type: application/json' \
+                -d '{"url":"https://example.com"}')
+              echo "$concurrent_status" > "/tmp/browser-concurrent-${attempt}.status"
+            ) &
+            pids+=("$!")
+          done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+          for attempt in $(seq 1 6); do
+            concurrent_status=$(cat "/tmp/browser-concurrent-${attempt}.status")
+            echo "Concurrent read $attempt HTTP status: $concurrent_status"
+            test "$concurrent_status" = "200"
+            grep -q '"content":' "/tmp/browser-concurrent-${attempt}.json"
+          done
+          sample_memory
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          samples = Path("/tmp/browser-memory-samples.txt").read_text(encoding="utf-8").splitlines()
+          if len(samples) < 22:
+              raise SystemExit(f"Expected at least 22 memory samples, got {len(samples)}")
+          scale = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+          values = []
+          for value in samples:
+              match = re.fullmatch(r"([0-9.]+)(B|KiB|MiB|GiB)", value.strip())
+              if not match:
+                  raise SystemExit(f"Could not parse Docker memory usage sample: {value!r}")
+              values.append(float(match.group(1)) * scale[match.group(2)] / 1024**2)
+          peak = max(values)
+          print(f"Browser worker sampled peak memory across 20 mixed-content reads: {peak:.1f} MiB ({len(values)} samples)")
+          if peak > 512:
+              raise SystemExit("Browser worker exceeded the 512 MiB CI memory ceiling")
+          PY
