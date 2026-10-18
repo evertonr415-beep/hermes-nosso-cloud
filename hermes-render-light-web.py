@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""Hermes Render/Spaces lightweight chat web server."""
-import importlib.util
+"""Hermes Render/Spaces lightweight chat web server - Autonomous Version."""
 import json
 import os
 import re
 import sys
-from importlib.machinery import SourceFileLoader
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
-SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
-ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
-AGENT_PATH = "/usr/local/bin/hermes-light-agent"
-MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
-MEMORY_WRITE_PATH = "/usr/local/bin/hermes-memory-write"
 IMAGE_STUDIO_PATH = "./hermes-image-studio.py"
 
 # Configurações básicas padrão para o ambiente de contêiner da Render
@@ -22,51 +15,56 @@ os.environ.setdefault("HERMES_INFERENCE_MODE", "groq")
 os.environ.setdefault("HERMES_PUBLIC_ANONYMOUS_ENABLED", "0")
 os.environ.setdefault("HERMES_FALLBACK_ON_HF_402", "0")
 
+# HTML Base nativo para garantir que a interface abra mesmo se os arquivos locais falharem
+DEFAULT_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hermes Cloud Chat</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
+        #chat { max-width: 600px; margin: 0 auto; }
+        input { width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+    <div id="chat">
+        <h2>Groq grátis · Qwen 27B</h2>
+        <div id="output"></div>
+        <input type="text" id="input" placeholder="Digite sua mensagem ou comando de imagem...">
+    </div>
+</body>
+</html>
+"""
 
-def load_module(name, path):
-    loader = SourceFileLoader(name, path)
-    spec = importlib.util.spec_from_loader(name, loader)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    loader.exec_module(module)
-    return module
-
-
-simple = load_module("hermes_render_simple", SIMPLE_PATH)
-router = load_module("hermes_render_model_router", ROUTER_PATH)
-agent = load_module("hermes_render_light_agent", AGENT_PATH)
-memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
-memory_writer = load_module("hermes_render_memory_write", MEMORY_WRITE_PATH)
-
-# Tenta acionar o adaptador de imagem
+# Tenta carregar o módulo de imagem com segurança
 image_studio = None
 if os.path.exists(IMAGE_STUDIO_PATH):
     try:
-        image_studio = load_module("hermes_image_studio", IMAGE_STUDIO_PATH)
+        from importlib.machinery import SourceFileLoader
+        import importlib.util
+        loader = SourceFileLoader("hermes_image_studio", IMAGE_STUDIO_PATH)
+        spec = importlib.util.spec_from_loader("hermes_image_studio", loader)
+        image_studio = importlib.util.module_from_spec(spec)
+        sys.modules["hermes_image_studio"] = image_studio
+        loader.exec_module(image_studio)
     except Exception:
-        pass
-
-# Ajusta as opções do painel de modelos
-simple.HTML = (
-    simple.HTML
-    .replace(
-        '<option value="auto">Automático · GPT-5.6 Sol</option>',
-        '<option value="auto">Groq grátis · Qwen 27B</option>'
-    )
-)
+        print("Aviso: Falha ao carregar o módulo hermes-image-studio.py")
 
 
 def handle_image_generation_request(text_prompt, aspect_ratio="square"):
     """Invoca o gerador de imagem da Pollinations e retorna envolvido em Markdown."""
     if not image_studio:
-        return {"response": "Erro: O adaptador hermes-image-studio.py não foi localizado."}
+        return {"response": "Erro: O adaptador hermes-image-studio.py não foi localizado ou está corrompido."}
     try:
         result = image_studio.generate(text_prompt, aspect_ratio)
         if isinstance(result, dict) and "url" in result:
-            # Entrega em formato Markdown direto para o chat da Vercel forçar a abertura automática
+            # Envia no padrão Markdown para abrir a imagem automaticamente na tela
             return {"response": f"![Imagem Gerada]({result['url']})"}
         else:
-            return {"response": "Erro: Retorno inválido do motor de imagem."}
+            return {"response": "Erro: O motor de imagem retornou um formato inválido."}
     except Exception as exc:
         return {"response": f"Erro na geração de imagem: {str(exc)}"}
 
@@ -77,7 +75,7 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(simple.HTML.encode("utf-8"))
+            self.wfile.write(DEFAULT_HTML.encode("utf-8"))
         elif self.path == "/api/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -89,7 +87,6 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
-        # Escuta de forma unificada qualquer rota de chat vinda do frontend
         if self.path in ("/api/chat", "/api/images/together"):
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
@@ -107,14 +104,12 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             prompt = payload.get("input", "").strip()
             aspect = payload.get("aspect", "square")
             
-            # Unificação Crítica: Qualquer rota processa prompts normais ou ordens de fotografia/imagem
-            # Identifica gatilhos de criação visual ou prompts complexos em inglês de fotografia
+            # Captura ordens de imagem baseadas em palavras em inglês ou comandos em português
             if "photograph" in prompt.lower() or "photo" in prompt.lower() or re.search(r"\b(gere|crie|desenhe|mostre|image|prompt)\b", prompt, re.IGNORECASE):
-                # Limpa os comandos em português caso existam no início do texto
                 clean_prompt = re.sub(r"\b(gere|crie|desenhe|mostre)\s+uma?\s+ima(gem|go)\s+(de\s+)?", "", prompt, flags=re.IGNORECASE)
                 response_data = handle_image_generation_request(clean_prompt, aspect)
             else:
-                # Fallback de texto seguro para o chat não travar caso seja uma mensagem comum
+                # Retorno de texto padrão para o chat continuar respondendo normalmente
                 response_data = {"response": f"Processado como texto: {prompt}"}
 
             self.wfile.write(json.dumps(response_data).encode('utf-8'))
@@ -124,11 +119,10 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_server():
-    # Coleta a porta que a Render exige (geralmente 10000) e escuta em todas as interfaces (0.0.0.0)
     port = int(os.getenv("PORT", "10000"))
     server_address = ('0.0.0.0', port)
     httpd = ThreadingHTTPServer(server_address, HermesRequestHandler)
-    print(f"Servidor HTTP do Hermes unificado e ativo na porta {port}...")
+    print(f"Servidor HTTP Independente ativo na porta {port}...")
     httpd.serve_forever()
 
 
