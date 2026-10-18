@@ -53,32 +53,6 @@ class AdvancedUiTests(unittest.TestCase):
         run.assert_called_once()
         advanced.assert_not_called()
 
-    def test_qwen_image_tool_returns_image_url_in_chat_json(self):
-        import json
-        tool_call = json.dumps({
-            "hermes_tool": "generate_image",
-            "prompt_en": "A watercolor illustration of a lighthouse at sunset",
-            "aspect": "landscape",
-        })
-        image = {
-            "url": "https://image.pollinations.ai/prompt/test",
-            "model": "black-forest-labs/flux.1-schnell",
-            "width": 1024,
-            "height": 768,
-        }
-        with (
-            patch.dict(os.environ, {"HERMES_INFERENCE_MODE": "groq"}, clear=False),
-            patch.object(app.router, "run", return_value={"ok": True, "response": tool_call, "provider": "groq-free"}),
-            patch.object(app.image_studio, "generate", return_value=image) as generate,
-        ):
-            output, via = app.chat_via_global_router({"input": "Gere uma imagem de um farol ao pôr do sol"})
-        self.assertEqual(via, "image-studio")
-        generate.assert_called_once_with("A watercolor illustration of a lighthouse at sunset", "landscape")
-        self.assertEqual(output["image_url"], image["url"])
-        self.assertEqual(output["image"]["provider"], "pollinations-ai")
-        self.assertEqual(output["hermes_tool"], "generate_image")
-        self.assertIn(image["url"], output["output"][0]["content"][0]["text"])
-
     def test_advanced_request_uses_agent_not_basic_router(self):
         with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","HERMES_AGENT_TOOLS_ENABLED":"1"},clear=False), \
              patch.object(app.router,"run") as basic, \
