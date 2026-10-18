@@ -168,7 +168,7 @@ function renderHistory(){
 }
 function imageUrlForMessage(m){
  const direct=typeof m.image_url==='string'?m.image_url:(m.image&&typeof m.image.url==='string'?m.image.url:'');
- const match=String(m.text||'').match(/https:\/\/image\\.pollinations\\.ai\/prompt\/[^\\s<>"']+/i);
+ const match=String(m.text||'').match(/https:\/\/image\.pollinations\.ai\/prompt\/[^\s<>"']+/i);
  const candidate=(direct|| (match?match[0].replace(/[),.;!?]+$/,''):'')).trim();
  if(!candidate)return '';
  try{
@@ -180,8 +180,8 @@ function messageTextWithoutImageUrl(m){
  let text=String(m.text||'');
  const url=imageUrlForMessage(m);
  if(url)text=text.replace(url,'');
- text=text.replace(/https:\/\/image\\.pollinations\\.ai\/prompt\/[^\\s<>"']+/i,'');
- text=text.replace(/^\\s*Imagem gerada:\\s*$/i,'').trim();
+ text=text.replace(/https:\/\/image\.pollinations\.ai\/prompt\/[^\s<>"']+/i,'');
+ text=text.replace(/^\s*Imagem gerada:\s*$/i,'').trim();
  return text;
 }
 function renderAssistantMessage(m){
