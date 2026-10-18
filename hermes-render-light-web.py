@@ -125,7 +125,7 @@ new_note = (
     '<div class="note"><label>'
     '<input type="checkbox" id="use-memory"> '
     'Usar memória privada nesta mensagem (enviada ao provedor selecionado)'
-    '</label> · Groq Free: limites de uso diário.</div>'
+    '</label> · Groq Free tem limites; o Llama local depende do seu computador e da conexão.</div>'
 )
 
 if old_note not in simple.HTML:
