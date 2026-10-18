@@ -28,9 +28,6 @@ on:
       - "tests/test_infra_audit.py"
       - "tests/test_memory_chat.py"
       - "tests/test_memory_ranking.py"
-      - "hermes-image-studio.py"
-      - "hermes-image-worker/app.py"
-      - "tests/test_image_studio.py"
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -50,7 +47,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py hermes-image-studio.py tests/test_image_studio.py hermes-image-worker/app.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py
       - name: Run offline inference-router regression tests
         run: |
           python -m unittest discover -s tests -p 'test_*router*.py' -v
@@ -81,5 +78,3 @@ jobs:
       - name: Check Advanced sidebar and browser JavaScript
         run: |
           python -m unittest discover -s tests -p 'test_advanced_ui.py' -v
-      - name: Test zero-cost image studio adapter (offline)
-        run: python -m unittest discover -s tests -p 'test_image_studio.py' -v
