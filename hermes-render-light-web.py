@@ -49,6 +49,7 @@ simple.HTML = (
     .replace(
         '<option value="auto">Automático · GPT-5.6 Sol</option>',
         '<option value="auto">Groq grátis · Qwen 27B</option>'
+        '<option value="ollama-local">Llama local · llama3.2:3b</option>'
         '<option value="advanced">Avançado · raciocínio + ferramentas</option>'
     )
     .replace('<option value="matrix">Matrix</option>', "")
@@ -123,7 +124,7 @@ old_note = (
 new_note = (
     '<div class="note"><label>'
     '<input type="checkbox" id="use-memory"> '
-    'Usar memória privada nesta mensagem (enviada à Groq)'
+    'Usar memória privada nesta mensagem (enviada ao provedor selecionado)'
     '</label> · Groq Free: limites de uso diário.</div>'
 )
 
@@ -191,7 +192,7 @@ def opt_in_memory_context(prompt, payload, mode):
     if os.getenv("HERMES_MEMORY_CHAT_ENABLED", "0") != "1":
         return prompt
 
-    if mode != "groq":
+    if mode not in ("groq", "ollama-local"):
         return prompt
 
     chunks = []
@@ -265,7 +266,11 @@ def chat_via_global_router(payload):
         except Exception:
             raise ModelUnavailable("Falha ao salvar o registro no banco de dados da memória.")
 
-    mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
+    requested_route = payload.get("route")
+    mode = (
+        "ollama-local" if requested_route == "ollama-local"
+        else os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
+    )
 
     effective_prompt = opt_in_memory_context(
         prompt.strip(), payload, mode
@@ -279,6 +284,8 @@ def chat_via_global_router(payload):
 
     if mode == "groq":
         req["provider_id"] = "groq-free"
+    elif mode == "ollama-local":
+        req["provider_id"] = "ollama-local"
     elif mode == "anonymous":
         req.update({
             "provider_id": "anonymous-public",
