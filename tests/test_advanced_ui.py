@@ -43,6 +43,15 @@ class AdvancedUiTests(unittest.TestCase):
         self.assertIn("$('#sidebar').classList.remove('open');",markup)
         self.assertIn("input.focus();",markup)
 
+    def test_pollinations_image_url_renders_as_responsive_image(self):
+        markup=app.simple.HTML
+        self.assertIn("function imageUrlForMessage(m)",markup)
+        self.assertIn("url.hostname==='image.pollinations.ai'",markup)
+        self.assertIn('<img class="generated-image"',markup)
+        self.assertIn('loading="lazy" decoding="async"',markup)
+        self.assertIn("image_url:typeof data.image_url==='string'?",markup)
+        self.assertIn("@media(max-width:640px)",markup)
+
     def test_basic_chat_keeps_original_router(self):
         with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq"},clear=False), \
              patch.object(app.router,"run",return_value={"ok":True,"response":"normal","provider":"groq-free"}) as run, \
