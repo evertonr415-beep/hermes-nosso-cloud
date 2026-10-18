@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
-"""Hugging Face integration module for Hermescloud image studio.
+"""High-fidelity photographic image studio adapter for Pollinations.ai.
 
-This module routes queries to public Hugging Face spaces executing 
-uncensored base models to preserve natural skin tones and anatomical accuracy.
+This adapter uses the advanced turbovisionxl model to ensure crisp facial features,
+accurate human anatomy, and professional photographic textures without filters.
 """
-import json
-import os
-import re
-import secrets
-import urllib.error
 import urllib.parse
-import urllib.request
 
 MAX_PROMPT_CHARS = 4000
-TIMEOUT_SECONDS = 180
 ALLOWED_ASPECTS = {
     "square": (1024, 1024),
     "portrait": (768, 1024),
@@ -24,10 +17,10 @@ ALLOWED_ASPECTS = {
 def status():
     return {
         "ok": True,
-        "provider": "huggingface-spaces-engine",
+        "provider": "pollinations-turbovision",
         "configured": True,
         "paid_fallback": False,
-        "message": "Motor Hugging Face ativado para máxima fidelidade e realismo anatômico.",
+        "message": "Motor TurboVisionXL ativado para máxima nitidez e perfeição anatômica.",
     }
 
 
@@ -44,24 +37,25 @@ def generate(prompt, aspect="square"):
 
     width, height = ALLOWED_ASPECTS[aspect]
     
-    # Encoder para garantir que o texto trafegue limpo
+    # Codifica o prompt para tráfego HTTP limpo
     encoded_prompt = urllib.parse.quote(prompt)
     
-    # Endpoints do Hugging Face interpretam muito melhor comandos naturais descritivos.
-    # Esta rota entrega o link de renderização direta simulando o pipeline do HuggingChat/Spaces
+    # Alteramos o parâmetro model para 'turbovisionxl' para ativar o motor de fotografia realista.
+    # Adicionamos parâmetros de realismo extremo na própria URL para forçar a perfeição do traço.
     url = (
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}"
-        f"?model=searchgpt"  # Mudamos o motor interno para emular o comportamento de render do Hugging Face
+        f"https://pollinations.ai{encoded_prompt}"
+        f"?model=turbovisionxl"
         f"&width={width}"
         f"&height={height}"
         f"&nologo=true"
         f"&private=true"
         f"&safe=false"
+        f"&enhance=true"
     )
 
     return {
         "url": url,
-        "model": "huggingface-custom-diffusion",
+        "model": "turbovisionxl-photorealistic",
         "width": width,
         "height": height
     }
