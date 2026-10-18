@@ -16,6 +16,7 @@ SIMPLE_PATH = "/opt/hermes-render/hermes-simple.py"
 ROUTER_PATH = "/usr/local/bin/hermes-global-model-router"
 AGENT_PATH = "/usr/local/bin/hermes-light-agent"
 MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
+MEMORY_WRITE_PATH = "/usr/local/bin/hermes-memory-write"
 
 # Keep the lightweight server safe when Render overrides Docker CMD and skips
 # /hermes-spaces-port-run.sh. Match that script's conservative defaults.
@@ -39,6 +40,7 @@ simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
 agent = load_module("hermes_render_light_agent", AGENT_PATH)
 memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
+memory_writer = load_module("hermes_render_memory_write", MEMORY_WRITE_PATH)
 
 
 # Ajusta os nomes dos modelos para o ambiente Render.
@@ -245,6 +247,23 @@ def chat_via_global_router(payload):
         raise ModelUnavailable(
             "Não enviei a mensagem: foi detectada uma possível chave privada."
         )
+
+    # Saving is an explicit command and requires the same per-message opt-in.
+    # Never let the model claim a write that the server has not performed.
+    save_match = re.match(
+        r"^\\s*(?:guarde|salve)\\s+na\\s+mem[oó]ria\\s*:\\s*(.*)$",
+        prompt.strip(), re.IGNORECASE | re.DOTALL,
+    )
+    if save_match:
+        if payload.get("use_memory") is not True or os.getenv("HERMES_MEMORY_CHAT_ENABLED", "0") != "1":
+            message = "Para salvar, marque a caixa de consentimento de memória e envie novamente: Guarde na memória: sua informação."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}
+        try:
+            memory_writer.append_record("USER.md", save_match.group(1))
+            confirm = "Informação adicionada com sucesso à sua memória privada na nuvem."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": confirm}]}]}
+        except Exception:
+            raise ModelUnavailable("Falha ao salvar o registro no banco de dados da memória.")
 
     mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
 
