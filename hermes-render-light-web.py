@@ -485,6 +485,55 @@ def chat_via_global_router(payload):
 
         raise ModelUnavailable(public_message)
 
+    # Intercepta a chamada estruturada da ferramenta de imagem produzida pelo Qwen.
+    # O prompt em inglês é validado no servidor antes de chamar o gerador gratuito.
+    response_text = result.get("response")
+    image_tool_call = None
+    if isinstance(response_text, str):
+        try:
+            candidate = json.loads(response_text.strip())
+        except (json.JSONDecodeError, TypeError):
+            candidate = None
+        if isinstance(candidate, dict) and candidate.get("hermes_tool") == "generate_image":
+            image_tool_call = candidate
+
+    if image_tool_call is not None:
+        image_prompt = image_tool_call.get("prompt_en")
+        image_aspect = image_tool_call.get("aspect", "square")
+        if not isinstance(image_prompt, str) or not 3 <= len(image_prompt.strip()) <= 4000:
+            message = "Não consegui preparar uma descrição válida para a imagem. Tente descrever a cena com mais detalhes."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "image-studio"
+        if image_aspect not in ("square", "portrait", "landscape"):
+            image_aspect = "square"
+        try:
+            image_result = image_studio.generate(image_prompt.strip(), image_aspect)
+        except image_studio.ImageStudioError as exc:
+            message = "Não consegui gerar a imagem agora: " + exc.message
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "image-studio"
+        except Exception as exc:
+            print("[hermes-image-studio] chat tool failed: " + type(exc).__name__, flush=True)
+            message = "O gerador de imagens está temporariamente indisponível. Tente novamente mais tarde."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "image-studio"
+
+        image_url = image_result.get("url")
+        if not isinstance(image_url, str) or not image_url.startswith("https://"):
+            message = "O gerador não retornou uma URL de imagem válida."
+            return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "image-studio"
+        message = "Imagem gerada: " + image_url
+        return {
+            "output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}],
+            "image_url": image_url,
+            "image": {
+                "url": image_url,
+                "provider": "pollinations-ai",
+                "model": image_result.get("model"),
+                "width": image_result.get("width"),
+                "height": image_result.get("height"),
+                "aspect": image_aspect,
+            },
+            "hermes_tool": "generate_image",
+        }, "image-studio"
+
     output = {
         "output": [{
             "type": "message",
