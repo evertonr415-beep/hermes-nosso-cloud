@@ -66,9 +66,11 @@ class AdvancedUiTests(unittest.TestCase):
             "width": 1024,
             "height": 768,
         }
-        with patch.dict(os.environ, {"HERMES_INFERENCE_MODE": "groq"}, clear=False), \\
-             patch.object(app.router, "run", return_value={"ok": True, "response": tool_call, "provider": "groq-free"}), \\
-             patch.object(app.image_studio, "generate", return_value=image) as generate:
+        with (
+            patch.dict(os.environ, {"HERMES_INFERENCE_MODE": "groq"}, clear=False),
+            patch.object(app.router, "run", return_value={"ok": True, "response": tool_call, "provider": "groq-free"}),
+            patch.object(app.image_studio, "generate", return_value=image) as generate,
+        ):
             output, via = app.chat_via_global_router({"input": "Gere uma imagem de um farol ao pôr do sol"})
         self.assertEqual(via, "image-studio")
         generate.assert_called_once_with("A watercolor illustration of a lighthouse at sunset", "landscape")
