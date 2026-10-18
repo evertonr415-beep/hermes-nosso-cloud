@@ -49,6 +49,9 @@ button,input,textarea,select{font:inherit}
 .msg{display:flex;margin:22px 0}
 .msg.user{justify-content:flex-end}
 .bubble{max-width:min(78%,720px);line-height:1.55;white-space:pre-wrap;word-wrap:break-word}
+.generated-image-wrap{margin-top:12px;max-width:min(100%,720px)}
+.generated-image{display:block;width:auto;max-width:100%;height:auto;max-height:75vh;object-fit:contain;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:var(--shadow)}
+@media(max-width:640px){.bubble{max-width:92%}.generated-image-wrap{width:100%}.generated-image{width:100%;max-height:65vh;border-radius:12px}}
 .user .bubble{background:var(--user);padding:11px 15px;border-radius:18px 18px 4px 18px}
 .assistant .bubble{padding:2px 0}
 .role{font-size:12px;color:var(--muted);margin-bottom:5px}
@@ -163,10 +166,35 @@ function renderHistory(){
  historyEl.innerHTML=conversations.map(c=>'<button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button>').join('');
  historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')})
 }
+function imageUrlForMessage(m){
+ const direct=typeof m.image_url==='string'?m.image_url:(m.image&&typeof m.image.url==='string'?m.image.url:'');
+ const match=String(m.text||'').match(/https:\/\/image\\.pollinations\\.ai\/prompt\/[^\\s<>"']+/i);
+ const candidate=(direct|| (match?match[0].replace(/[),.;!?]+$/,''):'')).trim();
+ if(!candidate)return '';
+ try{
+  const url=new URL(candidate);
+  return url.protocol==='https:'&&url.hostname==='image.pollinations.ai'&&url.pathname.startsWith('/prompt/')?url.href:'';
+ }catch(_){return ''}
+}
+function messageTextWithoutImageUrl(m){
+ let text=String(m.text||'');
+ const url=imageUrlForMessage(m);
+ if(url)text=text.replace(url,'');
+ text=text.replace(/https:\/\/image\\.pollinations\\.ai\/prompt\/[^\\s<>"']+/i,'');
+ text=text.replace(/^\\s*Imagem gerada:\\s*$/i,'').trim();
+ return text;
+}
+function renderAssistantMessage(m){
+ const text=messageTextWithoutImageUrl(m);
+ const answer=text?formatAnswer(text):'';
+ const url=imageUrlForMessage(m);
+ const image=url?'<div class="generated-image-wrap"><img class="generated-image" src="'+esc(url)+'" alt="Imagem gerada pelo Hermes" loading="lazy" decoding="async"></div>':'';
+ return answer+image;
+}
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':m.role==='assistant'?formatAnswer(m.text):esc(m.text))+(m.role==='assistant'&&Number.isInteger(m.tools_used)&&m.tools_used>0&&m.tools_used<=4?'<div class="tool">🔧 '+m.tools_used+' ferramenta(s) executada(s)</div>':'')+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':m.role==='assistant'?renderAssistantMessage(m):esc(m.text))+(m.role==='assistant'&&Number.isInteger(m.tools_used)&&m.tools_used>0&&m.tools_used<=4?'<div class="tool">🔧 '+m.tools_used+' ferramenta(s) executada(s)</div>':'')+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
@@ -181,7 +209,7 @@ async function submit(){
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',tools_used:Number.isInteger(data.tools_used)?Math.min(Math.max(data.tools_used,0),4):0});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',image_url:typeof data.image_url==='string'?data.image_url:(data.image&&typeof data.image.url==='string'?data.image.url:''),tools_used:Number.isInteger(data.tools_used)?Math.min(Math.max(data.tools_used,0),4):0});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
 }
