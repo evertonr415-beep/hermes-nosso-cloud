@@ -519,7 +519,7 @@ def chat_via_global_router(payload):
         if not isinstance(image_url, str) or not image_url.startswith("https://"):
             message = "O gerador não retornou uma URL de imagem válida."
             return {"output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}]}, "image-studio"
-        message = "Imagem gerada: " + image_url
+        message = "![Imagem Gerada](" + image_url + ")"
         return {
             "output": [{"type": "message", "content": [{"type": "output_text", "text": message}]}],
             "image_url": image_url,
