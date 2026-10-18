@@ -59,16 +59,16 @@ simple.HTML = (
 def handle_image_generation_request(text_prompt, aspect_ratio="square"):
     """Invoca a Pollinations via TurboVision e injeta tags Markdown de exibição."""
     if not image_studio:
-        return {"response": "Erro: O adaptador hermes-image-studio.py não está ativo."}
+        return "Erro: O adaptador hermes-image-studio.py não está ativo."
     try:
         result = image_studio.generate(text_prompt, aspect_ratio)
         if isinstance(result, dict) and "url" in result:
             # Força o link a ir formatado em Markdown para abrir estourado na tela
-            return {"response": f"![Imagem Gerada]({result['url']})"}
+            return f"![Imagem Gerada]({result['url']})"
         else:
-            return {"response": "Erro: Retorno inválido do motor de imagem."}
+            return "Erro: Retorno inválido do motor de imagem."
     except Exception as exc:
-        return {"response": f"Erro ao processar imagem: {str(exc)}"}
+        return f"Erro ao processar imagem: {str(exc)}"
 
 
 class HermesRequestHandler(BaseHTTPRequestHandler):
@@ -109,10 +109,25 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             # Se for comando ou prompt de fotografia/imagem, desvia para a Pollinations
             if "photograph" in prompt.lower() or "photo" in prompt.lower() or re.search(r"\b(gere|crie|desenhe|mostre|image|prompt)\b", prompt, re.IGNORECASE):
                 clean_prompt = re.sub(r"\b(gere|crie|desenhe|mostre)\s+uma?\s+ima(gem|go)\s+(de\s+)?", "", prompt, flags=re.IGNORECASE)
-                response_data = handle_image_generation_request(clean_prompt, aspect)
+                text_response = handle_image_generation_request(clean_prompt, aspect)
             else:
                 # Resposta padrão estável para mensagens de texto
-                response_data = {"response": f"Processado como texto: {prompt}"}
+                text_response = f"Processado como texto: {prompt}"
+
+            # Formato de payload oficial exigido pela interface clássica do Hermes para renderizar balões
+            response_data = {
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": text_response
+                            }
+                        ]
+                    }
+                ]
+            }
 
             self.wfile.write(json.dumps(response_data).encode('utf-8'))
         else:
