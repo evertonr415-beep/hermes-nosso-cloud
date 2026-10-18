@@ -236,7 +236,6 @@ RUN chmod +x /usr/local/bin/hermes-railway-entrypoint \
 USER root
 COPY hermes-simple.py /opt/hermes-render/hermes-simple.py
 COPY hermes-render-light-web.py /usr/local/bin/hermes-render-light-web
-COPY hermes-image-studio.py /usr/local/bin/hermes-image-studio.py
 COPY hermes-light-agent.py /usr/local/bin/hermes-light-agent
 COPY hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
 COPY hermes-memory-write.py /usr/local/bin/hermes-memory-write
