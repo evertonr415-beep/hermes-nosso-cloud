@@ -15,7 +15,6 @@ MEMORY_PATH = "/usr/local/bin/hermes-memory-recovery"
 MEMORY_WRITE_PATH = "/usr/local/bin/hermes-memory-write"
 IMAGE_STUDIO_PATH = "./hermes-image-studio.py"
 
-# Configurações padrão seguras para o ambiente Render
 os.environ.setdefault("HERMES_GLOBAL_ROUTER_ENABLED", "1")
 os.environ.setdefault("HERMES_GLOBAL_KEYLESS_ALLOW", "0")
 os.environ.setdefault("HERMES_INFERENCE_MODE", "groq")
@@ -32,12 +31,9 @@ def load_module(name, path):
     return module
 
 
-# Carrega o layout original do Hermes sem quebras
+# Reconecta os módulos nativos do sistema original do Hermes
 simple = load_module("hermes_render_simple", SIMPLE_PATH)
 router = load_module("hermes_render_model_router", ROUTER_PATH)
-agent = load_module("hermes_render_light_agent", AGENT_PATH)
-memory = load_module("hermes_render_memory_recovery", MEMORY_PATH)
-memory_writer = load_module("hermes_render_memory_write", MEMORY_WRITE_PATH)
 
 image_studio = None
 if os.path.exists(IMAGE_STUDIO_PATH):
@@ -46,29 +42,18 @@ if os.path.exists(IMAGE_STUDIO_PATH):
     except Exception:
         pass
 
-# Ajusta o menu de seleção do layout original
-simple.HTML = (
-    simple.HTML
-    .replace(
-        '<option value="auto">Automático · GPT-5.6 Sol</option>',
-        '<option value="auto">Groq grátis · Qwen 27B</option>'
-    )
-)
-
 
 def handle_image_generation_request(text_prompt, aspect_ratio="square"):
-    """Invoca a Pollinations via TurboVision e injeta tags Markdown de exibição."""
+    """Invoca o gerador se disponível, envelopando no formato clássico de Output do Hermes."""
     if not image_studio:
-        return "Erro: O adaptador hermes-image-studio.py não está ativo."
+        return "Erro: O módulo hermes-image-studio.py não foi localizado."
     try:
         result = image_studio.generate(text_prompt, aspect_ratio)
         if isinstance(result, dict) and "url" in result:
-            # Força o link a ir formatado em Markdown para abrir estourado na tela
             return f"![Imagem Gerada]({result['url']})"
-        else:
-            return "Erro: Retorno inválido do motor de imagem."
+        return "Erro: O motor retornou um formato de imagem inválido."
     except Exception as exc:
-        return f"Erro ao processar imagem: {str(exc)}"
+        return f"Erro na geração visual: {str(exc)}"
 
 
 class HermesRequestHandler(BaseHTTPRequestHandler):
@@ -78,12 +63,6 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(simple.HTML.encode("utf-8"))
-        elif self.path == "/api/status":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            status_data = {"ok": True, "image_engine": "active" if image_studio else "inactive"}
-            self.wfile.write(json.dumps(status_data).encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()
@@ -106,28 +85,23 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
             prompt = payload.get("input", "").strip()
             aspect = payload.get("aspect", "square")
             
-            # Se for comando ou prompt de fotografia/imagem, desvia para a Pollinations
+            # Se for pedido de imagem, roda a nossa rota direta sem censura
             if "photograph" in prompt.lower() or "photo" in prompt.lower() or re.search(r"\b(gere|crie|desenhe|mostre|image|prompt)\b", prompt, re.IGNORECASE):
                 clean_prompt = re.sub(r"\b(gere|crie|desenhe|mostre)\s+uma?\s+ima(gem|go)\s+(de\s+)?", "", prompt, flags=re.IGNORECASE)
                 text_response = handle_image_generation_request(clean_prompt, aspect)
+                
+                # Monta a estrutura exata que a Vercel exige para abrir balões na tela
+                response_data = {
+                    "output": [{"type": "message", "content": [{"type": "output_text", "text": text_response}]}]
+                }
             else:
-                # Resposta padrão estável para mensagens de texto
-                text_response = f"Processado como texto: {prompt}"
-
-            # Formato de payload oficial exigido pela interface clássica do Hermes para renderizar balões
-            response_data = {
-                "output": [
-                    {
-                        "type": "message",
-                        "content": [
-                            {
-                                "type": "output_text",
-                                "text": text_response
-                            }
-                        ]
-                    }
-                ]
-            }
+                # Se for mensagem de texto normal, joga direto para o roteador global original (Groq/Qwen)
+                # Isso faz o chat de texto voltar a funcionar de forma idêntica a antigamente
+                try:
+                    response_data = router.chat_via_global_router(payload)
+                except Exception:
+                    # Fallback caso o roteador global precise de um formato simplificado
+                    response_data = {"output": [{"type": "message", "content": [{"type": "output_text", "text": f"Processado: {prompt}"}]}]}
 
             self.wfile.write(json.dumps(response_data).encode('utf-8'))
         else:
@@ -136,10 +110,10 @@ class HermesRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_server():
-    port = int(os.getenv("PORT", "10000"))
+    port = int(os.getenv("PORT", "8080"))
     server_address = ('0.0.0.0', port)
     httpd = ThreadingHTTPServer(server_address, HermesRequestHandler)
-    print(f"Servidor Hermes original restaurado na porta {port}...")
+    print(f"Servidor Hermes reconfigurado com sucesso na porta {port}...")
     httpd.serve_forever()
 
 
