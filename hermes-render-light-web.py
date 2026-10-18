@@ -548,6 +548,10 @@ IMAGE_STUDIO_PATH = "/usr/local/bin/hermes-image-studio.py"
 if not os.path.isfile(IMAGE_STUDIO_PATH):
     IMAGE_STUDIO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hermes-image-studio.py")
 image_studio = load_module("hermes_image_studio", IMAGE_STUDIO_PATH)
+TOGETHER_IMAGE_PATH = "/usr/local/bin/hermes-together-image.py"
+if not os.path.isfile(TOGETHER_IMAGE_PATH):
+    TOGETHER_IMAGE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hermes-together-image.py")
+together_image = load_module("hermes_together_image", TOGETHER_IMAGE_PATH)
 _original_image_get = simple.Handler.do_GET
 _original_image_post = simple.Handler.do_POST
 
@@ -565,7 +569,7 @@ def _image_studio_get(self):
 
 def _image_studio_post(self):
     path = self.path.split("?", 1)[0]
-    if path != "/api/images":
+    if path not in ("/api/images", "/api/images/together"):
         return _original_image_post(self)
     if not self.require_auth():
         return
@@ -574,8 +578,17 @@ def _image_studio_post(self):
         if not raw_length.isdigit() or int(raw_length) > 16000:
             return self.sendb(413, json.dumps({"error": "Pedido muito grande."}, ensure_ascii=False))
         body = json.loads(self.rfile.read(int(raw_length)) or b"{}")
-        result = image_studio.generate(body.get("prompt"), body.get("aspect", "square"))
+        if path == "/api/images/together":
+            result = together_image.generate(
+                body.get("prompt"),
+                body.get("width", 1024),
+                body.get("height", 1024),
+            )
+        else:
+            result = image_studio.generate(body.get("prompt"), body.get("aspect", "square"))
         return self.sendb(200, json.dumps(result, ensure_ascii=False))
+    except together_image.TogetherImageError as exc:
+        return self.sendb(exc.status, json.dumps({"error": exc.message, "code": exc.code}, ensure_ascii=False))
     except image_studio.ImageStudioError as exc:
         return self.sendb(exc.status, json.dumps({"error": exc.message, "code": exc.code}, ensure_ascii=False))
     except (ValueError, TypeError, json.JSONDecodeError):
