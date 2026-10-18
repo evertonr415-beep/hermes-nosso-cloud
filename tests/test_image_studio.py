@@ -1,11 +1,11 @@
-"""Offline tests for Hermes Image Studio; no network calls or paid APIs."""
-import base64
+"""Offline tests for the Pollinations-backed Hermes Image Studio."""
 import importlib.util
-import json
 import os
 from pathlib import Path
+import urllib.error
+import urllib.parse
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 source = Path(__file__).resolve().parents[1] / "hermes-image-studio.py"
 spec = importlib.util.spec_from_file_location("hermes_image_studio_test", source)
@@ -14,95 +14,70 @@ spec.loader.exec_module(studio)
 
 
 class ImageStudioTests(unittest.TestCase):
-    def test_status_is_honest_when_not_configured(self):
+    def test_status_reports_free_provider_without_paid_fallback(self):
         with patch.dict(os.environ, {}, clear=True):
             result = studio.status()
-        self.assertFalse(result["configured"])
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["configured"])
+        self.assertEqual(result["provider"], "pollinations-ai")
         self.assertFalse(result["paid_fallback"])
-        self.assertIn("não fará chamadas pagas", result["message"])
-
-    def test_missing_provider_fails_closed(self):
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(studio.ImageStudioError) as ctx:
-                studio.generate("A photorealistic mountain landscape")
-        self.assertEqual(ctx.exception.code, "provider_not_configured")
-        self.assertEqual(ctx.exception.status, 503)
-
-    def test_only_direct_https_hf_space_urls_are_allowed(self):
-        cases = [
-            "http://user-space.hf.space",
-            "https://evil.example/image",
-            "https://user-space.hf.space/path",
-            "https://user:pass@user-space.hf.space",
-            "https://user-space.hf.space:8443",
-            "https://user-space.hf.space/?next=https://evil.example",
-        ]
-        for url in cases:
-            with self.subTest(url=url), patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": url}, clear=True):
-                with self.assertRaises(studio.ImageStudioError):
-                    studio.generate("A photorealistic mountain landscape")
 
     def test_prompt_and_aspect_validation_happens_before_network(self):
-        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": "https://my-space.hf.space"}, clear=True), \
-             patch.object(studio, "_request") as request:
-            for prompt, aspect in [("", "square"), ("ab", "square"), ("A valid prompt", "ultrawide")]:
-                with self.assertRaises(studio.ImageStudioError):
-                    studio.generate(prompt, aspect)
-            request.assert_not_called()
+        with patch.object(studio.urllib.request, "urlopen") as urlopen:
+            for prompt, aspect in [("", "square"), ("ab", "square"), ("A valid prompt", "ultrawide"), ("x" * 4001, "square")]:
+                with self.subTest(prompt_length=len(prompt), aspect=aspect):
+                    with self.assertRaises(studio.ImageStudioError) as ctx:
+                        studio.generate(prompt, aspect)
+                    self.assertEqual(ctx.exception.status, 400)
+            urlopen.assert_not_called()
 
-    def test_possible_credentials_are_rejected(self):
-        secret = "gsk_" + "x" * 30
-        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": "https://my-space.hf.space"}, clear=True), \
-             patch.object(studio, "_request") as request:
+    def test_successful_generation_returns_pollinations_url_and_dimensions(self):
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        with patch.object(studio.urllib.request, "urlopen", return_value=response) as urlopen:
+            result = studio.generate("A cinematic mountain landscape at sunrise", "landscape")
+
+        self.assertEqual(result["provider"] if "provider" in result else "pollinations-ai", "pollinations-ai")
+        self.assertEqual(result["model"], "black-forest-labs/flux.1-schnell")
+        self.assertEqual((result["width"], result["height"]), (1024, 768))
+        parsed = urllib.parse.urlparse(result["url"])
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "image.pollinations.ai")
+        params = urllib.parse.parse_qs(parsed.query)
+        self.assertEqual(params["model"], ["flux"])
+        self.assertEqual(params["width"], ["1024"])
+        self.assertEqual(params["height"], ["768"])
+        self.assertEqual(params["safe"], ["false"])
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], studio.TIMEOUT_SECONDS)
+
+    def test_all_aspects_map_to_expected_dimensions(self):
+        expected = {"square": (1024, 1024), "portrait": (768, 1024), "landscape": (1024, 768)}
+        response = MagicMock()
+        response.status = 200
+        response.__enter__.return_value = response
+        with patch.object(studio.urllib.request, "urlopen", return_value=response):
+            for aspect, dimensions in expected.items():
+                with self.subTest(aspect=aspect):
+                    result = studio.generate("A watercolor lighthouse", aspect)
+                    self.assertEqual((result["width"], result["height"]), dimensions)
+
+    def test_provider_network_error_is_reported_without_paid_fallback(self):
+        with patch.object(studio.urllib.request, "urlopen", side_effect=urllib.error.URLError("offline")):
             with self.assertRaises(studio.ImageStudioError) as ctx:
-                studio.generate("Please draw this text " + secret)
-            self.assertEqual(ctx.exception.code, "possible_secret")
-            request.assert_not_called()
+                studio.generate("A mountain landscape")
+        self.assertEqual(ctx.exception.code, "provider_unavailable")
+        self.assertEqual(ctx.exception.status, 503)
 
-    def test_event_stream_parser_reads_json_data(self):
-        result = studio._event_data(b'event: complete\ndata: [{"url":"/gradio_api/file=output.png"}]\n\n')
-        self.assertEqual(result[0]["url"], "/gradio_api/file=output.png")
-
-    def test_external_image_host_is_rejected(self):
-        with self.assertRaises(studio.ImageStudioError) as ctx:
-            studio._same_space_url("https://my-space.hf.space", "https://attacker.example/file.png")
-        self.assertEqual(ctx.exception.code, "unsafe_provider_result")
-
-    def test_successful_mock_generation_never_needs_paid_api(self):
-        png = b"\x89PNG\r\n\x1a\n" + b"mock-image-data"
-        responses = [
-            (json.dumps({"event_id": "evt_123"}).encode(), "application/json"),
-            (b'event: complete\ndata: [{"url":"/gradio_api/file=generated.png"}]\n\n', "text/event-stream"),
-            (png, "image/png"),
-        ]
-        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": "https://my-space.hf.space"}, clear=True), \
-             patch.object(studio, "_request", side_effect=responses) as request:
-            result = studio.generate("A cinematic mountain landscape at sunrise", "landscape")
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["provider"], "huggingface-zero-gpu-space")
-        self.assertFalse(result["paid_fallback"])
-        self.assertEqual(base64.b64decode(result["image_base64"]), png)
-        self.assertEqual(request.call_count, 3)
-
-
-    def test_official_flux_space_uses_its_infer_api(self):
-        png = b"\x89PNG\r\n\x1a\n" + b"mock-image-data"
-        responses = [
-            (json.dumps({"event_id": "evt_flux"}).encode(), "application/json"),
-            (b'event: complete\ndata: [{"url":"/gradio_api/file=generated.png"},{"seed":42}]\n\n', "text/event-stream"),
-            (png, "image/png"),
-        ]
-        base = "https://black-forest-labs-flux-1-schnell.hf.space"
-        with patch.dict(os.environ, {"HERMES_IMAGE_STUDIO_SPACE_URL": base}, clear=True), \
-             patch.object(studio, "_request", side_effect=responses) as request:
-            result = studio.generate("A cinematic mountain landscape at sunrise", "landscape")
-        self.assertTrue(result["ok"])
-        self.assertEqual(request.call_count, 3)
-        self.assertEqual(request.call_args_list[0].args[0], base + "/gradio_api/call/infer")
-        payload = request.call_args_list[0].args[1]
-        self.assertEqual(payload["data"], ["A cinematic mountain landscape at sunrise", 0, True, 1024, 768, 4])
-        self.assertEqual(request.call_args_list[1].args[0], base + "/gradio_api/call/infer/evt_flux")
-
+    def test_non_200_provider_response_is_reported(self):
+        response = MagicMock()
+        response.status = 429
+        response.__enter__.return_value = response
+        with patch.object(studio.urllib.request, "urlopen", return_value=response):
+            with self.assertRaises(studio.ImageStudioError) as ctx:
+                studio.generate("A mountain landscape")
+        self.assertEqual(ctx.exception.code, "generation_failed")
+        self.assertEqual(ctx.exception.status, 502)
 
 
 if __name__ == "__main__":
