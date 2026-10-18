@@ -237,6 +237,7 @@ USER root
 COPY hermes-simple.py /opt/hermes-render/hermes-simple.py
 COPY hermes-render-light-web.py /usr/local/bin/hermes-render-light-web
 COPY hermes-image-studio.py /usr/local/bin/hermes-image-studio.py
+COPY hermes-together-image.py /usr/local/bin/hermes-together-image.py
 COPY hermes-light-agent.py /usr/local/bin/hermes-light-agent
 COPY hermes-memory-recovery.py /usr/local/bin/hermes-memory-recovery
 COPY hermes-memory-write.py /usr/local/bin/hermes-memory-write
@@ -245,7 +246,7 @@ COPY hermes-infra-audit.py /usr/local/bin/hermes-infra-audit
 COPY hermes-spaces-port-run.sh /hermes-spaces-port-run.sh
 RUN chmod 0755 /hermes-spaces-port-run.sh /usr/local/bin/hermes-render-light-web \
     && /bin/bash -n /hermes-spaces-port-run.sh \
-    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-render-light-web /usr/local/bin/hermes-light-agent /usr/local/bin/hermes-memory-recovery /usr/local/bin/hermes-memory-write /usr/local/bin/hermes-image-studio.py /usr/local/bin/hermes-infra-audit /opt/hermes-render/hermes-simple.py
+    && /usr/bin/python3 -m py_compile /usr/local/bin/hermes-render-light-web /usr/local/bin/hermes-light-agent /usr/local/bin/hermes-memory-recovery /usr/local/bin/hermes-memory-write /usr/local/bin/hermes-image-studio.py /usr/local/bin/hermes-together-image.py /usr/local/bin/hermes-infra-audit /opt/hermes-render/hermes-simple.py
 ENV PORT=8080
 EXPOSE 8080
 ENTRYPOINT []
