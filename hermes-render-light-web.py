@@ -48,8 +48,10 @@ simple.HTML = (
     simple.HTML
     .replace(
         '<option value="auto">Automático · GPT-5.6 Sol</option>',
-        '<option value="auto">Groq grátis · Qwen 27B</option>'
-        '<option value="advanced">Avançado · raciocínio + ferramentas</option>'
+        '<option value="groq" selected>Groq · padrão</option>'
+        '<option value="ollama">Ollama · llama3.2:3b</option>'
+        '<option value="auto">Automático · fallback seguro</option>'
+        '<option value="advanced">Avançado · ferramentas (Groq)</option>'
     )
     .replace('<option value="matrix">Matrix</option>', "")
     .replace('<option value="local">Hermes Local</option>', "")
@@ -271,15 +273,25 @@ def chat_via_global_router(payload):
         prompt.strip(), payload, mode
     )
 
+    provider_choice = payload.get("route", "groq")
+    if provider_choice not in ("groq", "ollama", "auto", "advanced"):
+        provider_choice = "groq"
+
     req = {
         "prompt": effective_prompt,
         "sensitivity": "normal",
         "max_tokens": 512,
     }
 
-    if mode == "groq":
+    if provider_choice in ("groq", "advanced"):
         req["provider_id"] = "groq-free"
-    elif mode == "anonymous":
+    elif provider_choice == "ollama":
+        req["provider_id"] = "ollama-local"
+    elif provider_choice == "auto":
+        # Fallback is enabled only when the user explicitly chooses Auto.
+        req["allow_provider_fallback"] = True
+
+    if mode == "anonymous":
         req.update({
             "provider_id": "anonymous-public",
             "sensitivity": "public",
@@ -287,7 +299,7 @@ def chat_via_global_router(payload):
 
     if (
         mode == "groq"
-        and payload.get("route") == "advanced"
+        and provider_choice == "advanced"
         and os.getenv("HERMES_AGENT_TOOLS_ENABLED", "1") == "1"
     ):
         result = agent.answer(effective_prompt)
@@ -475,7 +487,7 @@ def chat_via_global_router(payload):
 
     # Só contabiliza ferramentas quando o agente confirma a execução.
     if (
-        payload.get("route") == "advanced"
+        provider_choice == "advanced"
         and result.get("provider") == "groq-free-advanced"
     ):
         count = result.get("tools_used", 0)
