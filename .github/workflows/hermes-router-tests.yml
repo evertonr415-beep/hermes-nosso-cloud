@@ -10,6 +10,8 @@ on:
       - "hermes-groq-catalog-monitor.py"
       - "tests/test_groq_catalog_monitor.py"
       - "hermes-render-light-web.py"
+      - "hermes-ollama-openai-bridge.py"
+      - "tests/test_ollama_openai_bridge.py"
       - "hermes-simple.py"
       - "tests/test_hf_router_retry.py"
       - "tests/test_public_anon_router.py"
@@ -47,10 +49,12 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax (no API keys needed)
         run: |
-          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py
+          python -m py_compile hermes-global-model-router.py hermes-render-light-web.py hermes-ollama-openai-bridge.py hermes-simple.py hermes-light-agent.py tests/test_light_agent.py tests/test_advanced_ui.py hermes-memory-sync.py tests/test_memory_sync.py hermes-memory-recovery.py hermes-memory-write.py tests/test_memory_write.py tests/test_memory_recovery.py tests/test_hf_router_retry.py tests/test_public_anon_router.py tests/test_groq_free_router.py hermes-infra-audit.py tests/test_infra_audit.py
       - name: Run offline inference-router regression tests
         run: |
           python -m unittest discover -s tests -p 'test_*router*.py' -v
+      - name: Test local Ollama bridge (offline)
+        run: python -m unittest discover -s tests -p 'test_ollama_openai_bridge.py' -v
 
       - name: Install offline cryptography dependency
         run: python -m pip install 'cryptography>=42,<47'
