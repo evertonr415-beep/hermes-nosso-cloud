@@ -163,10 +163,16 @@ function renderHistory(){
  historyEl.innerHTML=conversations.map(c=>'<button class="hist '+(c.id===active?'active':'')+'" data-id="'+c.id+'" title="'+esc(c.title)+'">💬 '+esc(c.title)+'</button>').join('');
  historyEl.querySelectorAll('.hist').forEach(b=>b.onclick=()=>{active=b.dataset.id;save();render();$('#sidebar').classList.remove('open')})
 }
+function providerName(v){
+ if(v==='groq-free'||v==='groq-free-advanced'||v==='groq')return 'Groq';
+ if(v==='ollama-local')return 'Ollama · llama3.2:3b';
+ if(v==='anonymous-public')return 'Provedor público';
+ return '';
+}
 function render(){
  ensure(); const c=current();
  if(!c.messages.length){chat.innerHTML='<div class="empty"><div><h1>Como posso ajudar?</h1><p>Converse com o Hermes de forma simples.</p></div></div>';return}
- chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':m.role==='assistant'?formatAnswer(m.text):esc(m.text))+(m.role==='assistant'&&Number.isInteger(m.tools_used)&&m.tools_used>0&&m.tools_used<=4?'<div class="tool">🔧 '+m.tools_used+' ferramenta(s) executada(s)</div>':'')+'</div></div>').join('');
+ chat.innerHTML=c.messages.map(m=>'<div class="msg '+m.role+'"><div class="bubble">'+(m.role==='assistant'?'<div class="role">Hermes</div>':'')+(m.error?'<div class="err">'+esc(m.text)+'</div>':m.role==='assistant'?formatAnswer(m.text):esc(m.text))+(m.role==='assistant'&&providerName(m.provider)?'<div class="tool">IA utilizada: '+esc(providerName(m.provider))+'</div>':'')+(m.role==='assistant'&&Number.isInteger(m.tools_used)&&m.tools_used>0&&m.tools_used<=4?'<div class="tool">🔧 '+m.tools_used+' ferramenta(s) executada(s)</div>':'')+'</div></div>').join('');
  requestAnimationFrame(()=>{$('#chatwrap').scrollTop=$('#chatwrap').scrollHeight})
 }
 function titleFrom(s){s=(s||'').trim().replace(/\s+/g,' ');return s.length>38?s.slice(0,38)+'…':s||'Nova conversa'}
@@ -181,7 +187,7 @@ async function submit(){
   const data=await res.json().catch(()=>({}));
   holder.remove();
   if(!res.ok)throw new Error(data.error||'Falha ao conversar com o Hermes');
-  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',tools_used:Number.isInteger(data.tools_used)?Math.min(Math.max(data.tools_used,0),4):0});
+  c.messages.push({role:'assistant',text:data.text||'(sem resposta)',provider:data.via||'',tools_used:Number.isInteger(data.tools_used)?Math.min(Math.max(data.tools_used,0),4):0});
  }catch(e){holder.remove();c.messages.push({role:'assistant',text:e.message||'Erro de conexão',error:true})}
  finally{send.disabled=false;statusEl.textContent='pronto';save();render();input.focus()}
 }
