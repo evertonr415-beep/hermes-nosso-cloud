@@ -74,7 +74,10 @@ def recover_record(name, *, endpoint=None, token=None, aes_key=None, opener=None
         if len(nonce) != 12 or not 17 <= len(encrypted) <= MAX_PLAINTEXT_BYTES + 16:
             raise MemoryAccessError("memory_invalid_record")
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-        plain = AESGCM(bytes.fromhex(aes_key)).decrypt(nonce, encrypted, None)
+        try:
+            plain = AESGCM(bytes.fromhex(aes_key)).decrypt(nonce, encrypted, None)
+        except Exception:
+            raise MemoryAccessError("memory_integrity_failed") from None
         if len(plain) > MAX_PLAINTEXT_BYTES:
             raise MemoryAccessError("memory_invalid_record")
         if hashlib.sha256(plain).hexdigest() != digest:
@@ -82,7 +85,17 @@ def recover_record(name, *, endpoint=None, token=None, aes_key=None, opener=None
         return plain.decode("utf-8")
     except MemoryAccessError:
         raise
-    except (urllib.error.URLError, OSError, ValueError, UnicodeError, KeyError, TypeError,
-            json.JSONDecodeError, Exception) as error:
+    except urllib.error.HTTPError as error:
+        # Classify status only; never expose or log the response body.
+        if error.code == 404:
+            code = "memory_not_found"
+        elif error.code in (401, 403):
+            code = "memory_auth_failed"
+        elif error.code >= 500:
+            code = "memory_backend_failed"
+        else:
+            code = "memory_read_denied"
+        raise MemoryAccessError(code) from None
+    except Exception:
         # Do not leak network errors, backend payloads, ciphertext or keys.
         raise MemoryAccessError("memory_unavailable") from None
