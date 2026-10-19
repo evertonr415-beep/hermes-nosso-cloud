@@ -35,6 +35,12 @@ class AdvancedUiTests(unittest.TestCase):
         self.assertNotIn('target="_blank">⚙ Avançado',markup)
         self.assertNotIn('href="/">⚙ Avançado',markup)
 
+    def test_provider_selector_offers_groq_ollama_and_safe_auto(self):
+        markup=app.simple.HTML
+        self.assertIn('<option value="groq" selected>Groq · padrão</option>',markup)
+        self.assertIn('<option value="ollama">Ollama · llama3.2:3b</option>',markup)
+        self.assertIn('<option value="auto">Automático · fallback seguro</option>',markup)
+
     def test_switch_to_advanced_selected_with_click(self):
         markup=app.simple.HTML
         self.assertIn('<option value="advanced">Avançado',markup)
