@@ -59,6 +59,24 @@ class AdvancedUiTests(unittest.TestCase):
             app.chat_via_global_router({"input":"Olá"})
         self.assertEqual(run.call_args.args[0]["provider_id"],"groq-free")
 
+    def test_ollama_403_is_not_mislabeled_as_groq(self):
+        failure={"provider":"ollama-local","model":"llama3.2:3b","error":"HTTPError","status":403}
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \
+             patch.object(app.router,"run",return_value={"ok":False,"error":"all_authorized_backends_unavailable","failures":[failure]}):
+            with self.assertRaises(app.ModelUnavailable) as caught:
+                app.chat_via_global_router({"input":"teste","route":"ollama"})
+        self.assertIn("Ollama HTTP 403",caught.exception.user_message)
+        self.assertNotIn("Groq HTTP 403",caught.exception.user_message)
+
+    def test_auto_403_does_not_claim_fallback_was_attempted(self):
+        failure={"provider":"ollama-local","model":"llama3.2:3b","error":"HTTPError","status":403}
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \
+             patch.object(app.router,"run",return_value={"ok":False,"error":"all_authorized_backends_unavailable","failures":[failure]}):
+            with self.assertRaises(app.ModelUnavailable) as caught:
+                app.chat_via_global_router({"input":"teste","route":"auto"})
+        self.assertIn("recusa de autorização",caught.exception.user_message)
+        self.assertIn("não foi tentado outro provedor",caught.exception.user_message)
+
     def test_switch_to_advanced_selected_with_click(self):
         markup=app.simple.HTML
         self.assertIn('<option value="advanced">Avançado',markup)

@@ -372,7 +372,7 @@ def chat_via_global_router(payload):
             and isinstance(f.get("status"), int)
         ]
 
-        if mode == "groq":
+        if provider_choice in ("groq", "advanced") and mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
                 public_message = (
                     "Falta GROQ_API_KEY no Render. Crie uma chave em "
@@ -389,11 +389,8 @@ def chat_via_global_router(payload):
                 )
             elif 403 in statuses:
                 details = [
-                    f.get("code")
-                    for f in failures
-                    if isinstance(f, dict)
+                    f.get("code") for f in failures if isinstance(f, dict)
                 ]
-
                 if "model_permission_blocked_org" in details:
                     public_message = (
                         "Groq HTTP 403: modelo bloqueado na organização. "
@@ -410,16 +407,14 @@ def chat_via_global_router(payload):
                         "permissões do modelo e os logs do Render."
                     )
             elif result.get("error") in (
-                "advanced_tool_budget_reached",
-                "invalid_tool_call",
+                "advanced_tool_budget_reached", "invalid_tool_call",
             ):
                 public_message = (
                     "O modo avançado atingiu o limite de ferramentas. "
                     "Divida a tarefa em etapas."
                 )
             elif result.get("error") in (
-                "empty_advanced_response",
-                "advanced_provider_unavailable",
+                "empty_advanced_response", "advanced_provider_unavailable",
             ):
                 public_message = (
                     "O modo avançado não respondeu. Tente novamente "
@@ -433,19 +428,37 @@ def chat_via_global_router(payload):
             elif any(s in (400, 404, 422) for s in statuses):
                 public_message = (
                     "Modelo indisponível na Groq (HTTP "
-                    + str(statuses[-1])
+                    + str(next(s for s in statuses if s in (400, 404, 422)))
                     + "). Verifique HERMES_GROQ_MODEL."
                 )
             elif statuses:
-                public_message = (
-                    "Groq temporariamente indisponível (HTTP "
-                    + str(statuses[-1]) + ")."
-                )
+                public_message = "Groq temporariamente indisponível (HTTP " + str(statuses[-1]) + ")."
             else:
+                public_message = "Sem resposta da Groq. Consulte os logs do Render."
+        elif provider_choice == "ollama":
+            if 401 in statuses or 403 in statuses:
                 public_message = (
-                    "Sem resposta da Groq. Consulte os logs do Render."
+                    "Ollama HTTP " + str(next(s for s in statuses if s in (401, 403))) +
+                    ": a ponte recusou a autenticação. Confira a chave da ponte "
+                    "no Render e no serviço do notebook, sem compartilhá-la."
                 )
-
+            elif statuses:
+                public_message = "Ollama indisponível (HTTP " + str(statuses[-1]) + "). Confira a ponte e o túnel."
+            else:
+                public_message = "Ollama não respondeu. Confirme se Ollama, ponte e túnel estão ativos."
+        elif provider_choice == "auto":
+            if 401 in statuses or 403 in statuses:
+                public_message = (
+                    "O modo Automático encontrou uma recusa de autorização (HTTP "
+                    + str(next(s for s in statuses if s in (401, 403)))
+                    + "). Por segurança, não foi tentado outro provedor."
+                )
+            elif 429 in statuses:
+                public_message = "A Groq atingiu o limite gratuito (HTTP 429) e o fallback configurado não respondeu."
+            elif statuses:
+                public_message = "O modo Automático não conseguiu obter resposta (HTTP " + str(statuses[-1]) + ")."
+            else:
+                public_message = "Nenhum provedor disponível no modo Automático."
         elif mode == "anonymous":
             if result.get("error") == "no_authorized_healthy_backends":
                 public_message = (
@@ -453,26 +466,15 @@ def chat_via_global_router(payload):
                     "HERMES_PUBLIC_ANONYMOUS_ENABLED."
                 )
             elif statuses:
-                public_message = (
-                    "API pública indisponível (HTTP "
-                    + str(statuses[-1]) + ")."
-                )
+                public_message = "API pública indisponível (HTTP " + str(statuses[-1]) + ")."
             else:
-                public_message = (
-                    "Não foi possível acessar o provedor público. "
-                    "Confira os logs do Render."
-                )
+                public_message = "Não foi possível acessar o provedor público. Confira os logs do Render."
         elif 402 in statuses:
-            public_message = (
-                "HF retornou HTTP 402 e a rota pública não respondeu."
-            )
+            public_message = "HF retornou HTTP 402 e a rota pública não respondeu."
         elif statuses:
-            public_message = (
-                "Falha de inferência HTTP " + str(statuses[-1])
-            )
+            public_message = "Falha de inferência HTTP " + str(statuses[-1])
         else:
             public_message = "Não há provedor de IA disponível."
-
         raise ModelUnavailable(public_message)
 
     output = {
