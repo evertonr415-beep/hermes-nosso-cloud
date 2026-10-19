@@ -60,13 +60,50 @@ class GroqFreeTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         send.assert_not_called()
 
-    def test_429_does_not_retry(self):
+    def test_429_does_not_retry_without_explicit_auto_fallback(self):
         error = urllib.error.HTTPError("https://api.groq.com", 429, "limit", None, None)
         with (patch.dict(os.environ, ENV, clear=True),
               patch.object(router.urllib.request, "urlopen", side_effect=error) as send):
             result = self.query()
         self.assertFalse(result["ok"])
         self.assertEqual(result["failures"][0]["status"], 429)
+        self.assertEqual(send.call_count, 1)
+
+    def test_auto_mode_can_fallback_from_groq_429_to_configured_ollama(self):
+        error = urllib.error.HTTPError("https://api.groq.com", 429, "limit", None, None)
+        env = {
+            **ENV,
+            "HERMES_GLOBAL_ALLOWED_PROVIDERS": "ollama-local",
+            "HERMES_GLOBAL_PROVIDERS_JSON": json.dumps([{
+                "id": "ollama-local", "url": "https://llama.example.com/v1/chat/completions",
+                "model": "llama3.2:3b", "api_key_env": "HERMES_LLAMA_BRIDGE_KEY", "priority": 0,
+            }]),
+            "HERMES_LLAMA_BRIDGE_KEY": "bridge-test-key",
+        }
+        with (patch.dict(os.environ, env, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=[error, Response()]) as send):
+            result = router.run({"prompt":"Responda OK.", "sensitivity":"normal",
+                                 "allow_provider_fallback":True, "max_tokens":12})
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["provider"], "ollama-local")
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(send.call_args_list[1].args[0].full_url, "https://llama.example.com/v1/chat/completions")
+
+    def test_429_fallback_is_not_enabled_without_explicit_auto_mode(self):
+        error = urllib.error.HTTPError("https://api.groq.com", 429, "limit", None, None)
+        env = {
+            **ENV,
+            "HERMES_GLOBAL_ALLOWED_PROVIDERS": "ollama-local",
+            "HERMES_GLOBAL_PROVIDERS_JSON": json.dumps([{
+                "id": "ollama-local", "url": "https://llama.example.com/v1/chat/completions",
+                "model": "llama3.2:3b", "api_key_env": "HERMES_LLAMA_BRIDGE_KEY", "priority": 0,
+            }]),
+            "HERMES_LLAMA_BRIDGE_KEY": "bridge-test-key",
+        }
+        with (patch.dict(os.environ, env, clear=True),
+              patch.object(router.urllib.request, "urlopen", side_effect=error) as send):
+            result = router.run({"prompt":"Responda OK.", "sensitivity":"normal", "max_tokens":12})
+        self.assertFalse(result["ok"])
         self.assertEqual(send.call_count, 1)
 
     def test_403_org_model_permission_code_is_safely_classified(self):
