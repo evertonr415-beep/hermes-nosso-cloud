@@ -201,13 +201,40 @@ def opt_in_memory_context(prompt, payload, mode):
     for name in ("MEMORY.md", "USER.md"):
         try:
             part = memory.recover_record(name)
-        except memory.MemoryAccessError:
+        except memory.MemoryAccessError as error:
+            # Diagnostics contain only a fixed error code and record name;
+            # never log plaintext, ciphertext, tokens, keys, or backend bodies.
+            code = str(error)
+            allowed_codes = {
+                "memory_not_configured", "memory_not_found",
+                "memory_auth_failed", "memory_backend_failed",
+                "memory_integrity_failed", "memory_invalid_record",
+                "memory_read_denied", "memory_unavailable",
+                "memory_response_too_large", "invalid_memory_key",
+            }
+            if code not in allowed_codes:
+                code = "memory_unavailable"
+            print(
+                "[hermes-memory-diagnostic] record=%s status=%s" % (name, code),
+                flush=True,
+            )
             continue
 
         if part.strip():
             chunks.append(part[:1000])
+            print(
+                "[hermes-memory-diagnostic] record=%s status=recovered chars=%d"
+                % (name, len(part)),
+                flush=True,
+            )
+        else:
+            print(
+                "[hermes-memory-diagnostic] record=%s status=empty" % name,
+                flush=True,
+            )
 
     if not chunks:
+        print("[hermes-memory-diagnostic] status=no_memory_context", flush=True)
         return prompt
 
     context = "\n".join(chunks)[:1800]
