@@ -372,13 +372,6 @@ def chat_via_global_router(payload):
             and isinstance(f.get("status"), int)
         ]
 
-        selected_provider = {
-            "groq": "Groq",
-            "advanced": "Groq (modo avançado)",
-            "ollama": "Ollama · llama3.2:3b",
-            "auto": "modo Automático",
-        }.get(provider_choice, "provedor selecionado")
-
         if provider_choice in ("groq", "advanced") and mode == "groq":
             if not os.getenv("GROQ_API_KEY", "").strip():
                 public_message = (
