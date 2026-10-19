@@ -125,7 +125,7 @@ old_note = (
 new_note = (
     '<div class="note"><label>'
     '<input type="checkbox" id="use-memory"> '
-    'Usar memória privada nesta mensagem (enviada à Groq)'
+    'Usar memória privada nesta mensagem (enviada ao modelo selecionado)'
     '</label> · Groq Free: limites de uso diário.</div>'
 )
 
@@ -193,7 +193,7 @@ def opt_in_memory_context(prompt, payload, mode):
     if os.getenv("HERMES_MEMORY_CHAT_ENABLED", "0") != "1":
         return prompt
 
-    if mode != "groq":
+    if mode not in ("groq", "ollama"):
         return prompt
 
     chunks = []

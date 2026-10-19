@@ -41,12 +41,24 @@ class AdvancedUiTests(unittest.TestCase):
         self.assertIn('<option value="ollama">Ollama · llama3.2:3b</option>',markup)
         self.assertIn('<option value="auto">Automático · fallback seguro</option>',markup)
 
-    def test_provider_choice_is_sent_to_router_and_memory_stays_groq_only(self):
-        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq"},clear=False), \
+    def test_provider_choice_sends_consented_memory_to_ollama(self):
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","HERMES_MEMORY_CHAT_ENABLED":"1"},clear=False), \
+             patch.object(app.memory,"recover_record",return_value="Fato de memória de teste"), \
              patch.object(app.router,"run",return_value={"ok":True,"response":"Ollama respondeu","provider":"ollama-local"}) as run:
             output,via=app.chat_via_global_router({"input":"Olá","route":"ollama","use_memory":True})
         self.assertEqual(via,"ollama-local")
         self.assertEqual(run.call_args.args[0]["provider_id"],"ollama-local")
+        prompt=run.call_args.args[0]["prompt"]
+        self.assertIn("memory_data",prompt)
+        self.assertIn("Fato de memória de teste",prompt)
+        self.assertTrue(prompt.endswith("Olá"))
+
+    def test_ollama_memory_requires_explicit_consent(self):
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","HERMES_MEMORY_CHAT_ENABLED":"1"},clear=False), \
+             patch.object(app.memory,"recover_record") as recover, \
+             patch.object(app.router,"run",return_value={"ok":True,"response":"Ollama respondeu","provider":"ollama-local"}) as run:
+            app.chat_via_global_router({"input":"Olá","route":"ollama","use_memory":False})
+        recover.assert_not_called()
         self.assertNotIn("memory_data",run.call_args.args[0]["prompt"])
 
     def test_auto_choice_enables_explicit_fallback_but_groq_is_default(self):
