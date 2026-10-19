@@ -475,33 +475,6 @@ def chat_via_global_router(payload):
             public_message = "Falha de inferência HTTP " + str(statuses[-1])
         else:
             public_message = "Não há provedor de IA disponível."
-        elif mode == "anonymous":
-            if result.get("error") == "no_authorized_healthy_backends":
-                public_message = (
-                    "Rota pública desativada. Verifique "
-                    "HERMES_PUBLIC_ANONYMOUS_ENABLED."
-                )
-            elif statuses:
-                public_message = (
-                    "API pública indisponível (HTTP "
-                    + str(statuses[-1]) + ")."
-                )
-            else:
-                public_message = (
-                    "Não foi possível acessar o provedor público. "
-                    "Confira os logs do Render."
-                )
-        elif 402 in statuses:
-            public_message = (
-                "HF retornou HTTP 402 e a rota pública não respondeu."
-            )
-        elif statuses:
-            public_message = (
-                "Falha de inferência HTTP " + str(statuses[-1])
-            )
-        else:
-            public_message = "Não há provedor de IA disponível."
-
         raise ModelUnavailable(public_message)
 
     output = {
