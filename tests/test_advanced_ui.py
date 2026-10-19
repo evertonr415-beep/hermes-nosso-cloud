@@ -61,7 +61,7 @@ class AdvancedUiTests(unittest.TestCase):
 
     def test_ollama_403_is_not_mislabeled_as_groq(self):
         failure={"provider":"ollama-local","model":"llama3.2:3b","error":"HTTPError","status":403}
-        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \\
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \
              patch.object(app.router,"run",return_value={"ok":False,"error":"all_authorized_backends_unavailable","failures":[failure]}):
             with self.assertRaises(app.ModelUnavailable) as caught:
                 app.chat_via_global_router({"input":"teste","route":"ollama"})
@@ -70,7 +70,7 @@ class AdvancedUiTests(unittest.TestCase):
 
     def test_auto_403_does_not_claim_fallback_was_attempted(self):
         failure={"provider":"ollama-local","model":"llama3.2:3b","error":"HTTPError","status":403}
-        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \\
+        with patch.dict(os.environ,{"HERMES_INFERENCE_MODE":"groq","GROQ_API_KEY":"gsk_"+"x"*24},clear=False), \
              patch.object(app.router,"run",return_value={"ok":False,"error":"all_authorized_backends_unavailable","failures":[failure]}):
             with self.assertRaises(app.ModelUnavailable) as caught:
                 app.chat_via_global_router({"input":"teste","route":"auto"})
