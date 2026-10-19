@@ -268,14 +268,14 @@ def chat_via_global_router(payload):
             raise ModelUnavailable("Falha ao salvar o registro no banco de dados da memória.")
 
     mode = os.getenv("HERMES_INFERENCE_MODE", "groq").strip().lower()
-
-    effective_prompt = opt_in_memory_context(
-        prompt.strip(), payload, mode
-    )
-
     provider_choice = payload.get("route", "groq")
     if provider_choice not in ("groq", "ollama", "auto", "advanced"):
         provider_choice = "groq"
+
+    # Private memory context is only sent when Groq is explicitly selected.
+    effective_prompt = opt_in_memory_context(
+        prompt.strip(), payload, provider_choice
+    )
 
     req = {
         "prompt": effective_prompt,
