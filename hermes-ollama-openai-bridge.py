@@ -14,7 +14,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = os.getenv("HERMES_OLLAMA_MODEL", "llama3.2:3b")
-KEY = os.getenv("HERMES_LLM_BRIDGE_KEY", "")
+# Keep this name aligned with the Render custom-provider api_key_env.
+KEY = os.getenv("HERMES_LLAMA_BRIDGE_KEY", "")
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 HOST = "127.0.0.1"
 PORT = int(os.getenv("HERMES_OLLAMA_BRIDGE_PORT", "8766"))
@@ -94,7 +95,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/v1/chat/completions":
             self.send_json(404, {"error": "route_not_allowed"})
             return
-        if not hmac.compare_digest(
+        if not KEY or not hmac.compare_digest(
             self.headers.get("Authorization", ""), "Bearer " + KEY
         ):
             self.send_json(401, {"error": "unauthorized"})
@@ -144,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     if len(KEY) < 32:
-        raise SystemExit("ERRO: HERMES_LLM_BRIDGE_KEY ausente ou curta (mínimo 32 caracteres).")
+        raise SystemExit("ERRO: HERMES_LLAMA_BRIDGE_KEY ausente ou curta (mínimo 32 caracteres).")
     if not MODEL or len(MODEL) > 100:
         raise SystemExit("ERRO: modelo inválido.")
     if not 1 <= PORT <= 65535:
