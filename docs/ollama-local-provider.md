@@ -26,7 +26,7 @@ Configure apenas depois de confirmar que o endpoint é protegido e que o segredo
 - `HERMES_GLOBAL_PROVIDERS_JSON=[{"id":"ollama-local","url":"https://llama.sistemavotoforte.com.br/v1/chat/completions","model":"llama3.2:3b","api_key_env":"HERMES_LLAMA_BRIDGE_KEY","priority":-30,"max_tokens":512,"timeout":20}]`
 - `HERMES_LLAMA_BRIDGE_KEY`: o mesmo valor secreto já guardado no computador.
 
-Atenção: `HERMES_GLOBAL_ALLOWED_PROVIDERS` é uma lista de provedores personalizados autorizados. Se o ambiente já contiver provedores personalizados necessários, preserve-os e acrescente `ollama-local), em vez de substituir a lista inteira. Do mesmo modo, se `HERMES_GLOBAL_PROVIDERS_JSON` já tiver entradas válidas, preserve-as e acrescente a entrada local.
+Atenção: `HERMES_GLOBAL_ALLOWED_PROVIDERS` é uma lista de provedores personalizados autorizados. Se o ambiente já contiver provedores personalizados necessários, preserve-os e acrescente `ollama-local`, em vez de substituir a lista inteira. Do mesmo modo, se `HERMES_GLOBAL_PROVIDERS_JSON` já tiver entradas válidas, preserve-as e acrescente a entrada local.
 
 ## Sequência de validação antes de ativar
 
